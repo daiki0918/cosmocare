@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: cosmocare-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: HOST
+        value: 0.0.0.0
