@@ -11,9 +11,23 @@ const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 const sessions = new Map();
 const requestStreamClients = new Set();
+const hasAdmin = await User.exists({ type: "Admin" });
 
 app.use(cors());
 app.use(express.json());
+
+if (!hasAdmin && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+  const admin = await User.create({
+    name: process.env.ADMIN_NAME || "System Administrator",
+    email: process.env.ADMIN_EMAIL,
+    type: "Admin",
+    chapel: process.env.ADMIN_CHAPEL || "Administration",
+    status: "Active",
+    ...createPassword(process.env.ADMIN_PASSWORD),
+  });
+
+  console.log(`Initial administrator created: ${admin.email}`);
+}
 
 const userSchema = new mongoose.Schema(
   {
