@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 
-const emptyForm = { name: '', email: '', password: '', type: 'Staff', chapel: '', status: 'Active' }
+const emptyForm = { name: '', email: '', password: '', type: 'Staff', branch: '', chapel: '', status: 'Active' }
 const branches = ['Argao', 'Bogo','Car-Car', 'Corduva', 'Danao', 'Junquera', 'Lapu-Lapu', 'Lilioan', 'Mandaue', 'Maracas']
+const chapels = Array.from({ length: 10 }, (_, index) => `Chapel ${index + 1}`)
 const PAGE_SIZE = 5
 
 function StaffAccounts() {
@@ -24,14 +25,18 @@ function StaffAccounts() {
     const interval = window.setInterval(refresh, 10000)
     return () => window.clearInterval(interval)
   }, [])
-  const filteredAccounts = accounts.filter((account) => [account.name, account.email, account.type, account.chapel, account.status].some((value) => String(value || '').toLowerCase().includes(search.trim().toLowerCase())))
+  const filteredAccounts = accounts.filter((account) => [account.name, account.email, account.type, account.branch, account.chapel, account.chapelName, account.status].some((value) => String(value || '').toLowerCase().includes(search.trim().toLowerCase())))
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / PAGE_SIZE))
   const page = Math.min(currentPage, totalPages)
   const visibleAccounts = filteredAccounts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const updateForm = (event) => {
     const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === 'branch' && value !== current.branch ? { chapel: '' } : {}),
+    }))
     setFormError('')
   }
 
@@ -53,9 +58,10 @@ function StaffAccounts() {
     setSaving(true)
     setFormError('')
     try {
+      const payload = { ...form, chapelName: form.chapel }
       const saved = await (editingId
-        ? api(`/api/accounts/${editingId}`, { method: 'PATCH', body: JSON.stringify(form) })
-        : api('/api/accounts', { method: 'POST', body: JSON.stringify(form) }))
+        ? api(`/api/accounts/${editingId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : api('/api/accounts', { method: 'POST', body: JSON.stringify(payload) }))
       setAccounts((items) => editingId ? items.map((account) => account.id === editingId ? saved : account) : [...items, saved])
       setError('')
       setForm(emptyForm)
@@ -74,7 +80,7 @@ function StaffAccounts() {
   }
 
   const editAccount = (account) => {
-    setForm({ name: account.name, email: account.email, password: '', type: account.type, chapel: account.chapel, status: account.status })
+    setForm({ name: account.name, email: account.email, password: '', type: account.type, branch: account.branch || account.chapel, chapel: account.chapel || account.chapelName || '', status: account.status })
     setFormError('')
     setEditingId(account.id)
     setShowForm(true)
@@ -113,7 +119,7 @@ function StaffAccounts() {
         <div className="accounts-table-toolbar"><input className="request-search" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1) }} placeholder="Search name, email, account type, or branch..." /><span>{filteredAccounts.length} matching account{filteredAccounts.length === 1 ? '' : 's'}</span></div>
         <table className="accounts-table">
           <thead><tr><th>Account</th><th>Type</th><th>Chapel access</th><th>Status</th><th aria-label="Actions" /></tr></thead>
-          <tbody>{visibleAccounts.map((account) => <tr key={account.id}><td><strong>{account.name}</strong><small>{account.email}</small></td><td><span className={`account-type ${account.type.toLowerCase()}`}>{account.type}</span></td><td>{account.chapel}</td><td><span className={`account-status ${account.status.toLowerCase()}`}>{account.status}</span></td><td><div className="account-actions-menu"><button type="button" onClick={() => editAccount(account)}>Edit</button><button className="delete-account" type="button" onClick={() => setDeleteTarget(account)}>Delete</button></div></td></tr>)}</tbody>
+          <tbody>{visibleAccounts.map((account) => <tr key={account.id}><td><strong>{account.name}</strong><small>{account.email}</small></td><td><span className={`account-type ${account.type.toLowerCase()}`}>{account.type}</span></td><td>{account.type === 'Chapel' && account.chapelName ? `${account.chapelName} · ${account.branch || account.chapel}` : (account.branch || account.chapel)}</td><td><span className={`account-status ${account.status.toLowerCase()}`}>{account.status}</span></td><td><div className="account-actions-menu"><button type="button" onClick={() => editAccount(account)}>Edit</button><button className="delete-account" type="button" onClick={() => setDeleteTarget(account)}>Delete</button></div></td></tr>)}</tbody>
         </table>
       </div>
       <div className="accounts-table-footer">
@@ -135,7 +141,8 @@ function StaffAccounts() {
                 <label><span>Email address</span><input name="email" type="email" value={form.email} onChange={updateForm} required placeholder="name@cosmocare.com" /></label>
                 <label><span>{editingId ? 'New password' : 'Temporary password'}</span><input name="password" type="password" value={form.password} onChange={updateForm} required={!editingId} minLength="8" placeholder={editingId ? 'Leave blank to keep current password' : 'At least 8 characters'} /></label>
                 <label><span>Account type</span><select name="type" value={form.type} onChange={updateForm}><option>Staff</option><option>Chapel</option><option>Admin</option></select></label>
-                <label><span>Branch access</span><select name="chapel" value={form.chapel} onChange={updateForm} required><option value="">Select a branch</option>{branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</select></label>
+                <label><span>Branch access</span><select name="branch" value={form.branch} onChange={updateForm} required><option value="">Select a branch</option>{branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</select></label>
+                {form.branch && <label><span>Chapel room</span><select name="chapel" value={form.chapel} onChange={updateForm} required={form.type === 'Chapel'}><option value="">Select a chapel room</option>{chapels.map((chapel) => <option key={chapel} value={chapel}>{chapel}</option>)}</select></label>}
                 <label><span>Status</span><select name="status" value={form.status} onChange={updateForm}><option>Active</option><option>Inactive</option></select></label>
               </div>
               <div className="modal-actions">

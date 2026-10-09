@@ -14,7 +14,7 @@ function LoginPage() {
     try {
       const user = await login(email, password)
       if (user.type !== 'Admin') throw new Error('This account does not have administrator access.')
-      sessionStorage.setItem('admin-session', user.email)
+      localStorage.setItem('admin-session', user.email)
       window.location.assign('/admin/dashboard')
     } catch (requestError) {
       setError(requestError.message)

@@ -5,29 +5,39 @@ import LoginPage from './pages/admin/LoginPage.jsx'
 import StaffDashboard from './pages/staff/StaffDashboard.jsx'
 import StaffLogin from './pages/staff/StaffLogin.jsx'
 
+const authStorageKeys = ['admin-session', 'staff-session', 'chapel-session', 'cosmocare-token', 'cosmocare-user']
+
 function App() {
+  authStorageKeys.forEach((key) => {
+    const existingValue = localStorage.getItem(key)
+    const sessionValue = sessionStorage.getItem(key)
+    if (!existingValue && sessionValue) localStorage.setItem(key, sessionValue)
+  })
   const path = window.location.pathname
 
   if (path === '/admin/dashboard') {
-    return sessionStorage.getItem('admin-session') ? <AdminDashboard /> : <LoginPage />
+    return localStorage.getItem('admin-session') ? <AdminDashboard /> : <LoginPage />
   }
 
   if (path === '/admin/login' || path === '/login') {
-    if (sessionStorage.getItem('admin-session')) {
+    if (localStorage.getItem('admin-session')) {
       return <AdminDashboard />
     }
     return <LoginPage />
   }
 
   if (path === '/staff/login') {
+    if (localStorage.getItem('staff-session')) {
+      return <StaffDashboard />
+    }
     return <StaffLogin />
   }
 
   if (path === '/staff/dashboard') {
-    return sessionStorage.getItem('staff-session') ? <StaffDashboard /> : <StaffLogin />
+    return localStorage.getItem('staff-session') ? <StaffDashboard /> : <StaffLogin />
   }
 
-  if (!sessionStorage.getItem('chapel-session')) {
+  if (!localStorage.getItem('chapel-session')) {
     return <CustomerLogin />
   }
 

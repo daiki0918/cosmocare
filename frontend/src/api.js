@@ -1,8 +1,20 @@
 const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`
 export { API_URL }
 
+function clearStoredSession() {
+  for (const key of ['admin-session', 'staff-session', 'chapel-session', 'cosmocare-token', 'cosmocare-user']) {
+    localStorage.removeItem(key)
+    sessionStorage.removeItem(key)
+  }
+}
+
+function redirectToLogin() {
+  const path = window.location.pathname
+  window.location.assign(path.startsWith('/admin') || path === '/login' ? '/admin/login' : path.startsWith('/staff') ? '/staff/login' : '/')
+}
+
 export async function api(path, options = {}) {
-  const token = sessionStorage.getItem('cosmocare-token')
+  const token = localStorage.getItem('cosmocare-token')
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -12,6 +24,10 @@ export async function api(path, options = {}) {
     },
   })
   const body = response.status === 204 ? null : await response.json()
+  if (response.status === 401 && token && path !== '/api/auth/login') {
+    clearStoredSession()
+    redirectToLogin()
+  }
   if (!response.ok) throw new Error(body?.message || 'The server could not complete the request.')
   return body
 }
@@ -21,7 +37,7 @@ export async function login(email, password) {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  sessionStorage.setItem('cosmocare-token', result.token)
-  sessionStorage.setItem('cosmocare-user', JSON.stringify(result.user))
+  localStorage.setItem('cosmocare-token', result.token)
+  localStorage.setItem('cosmocare-user', JSON.stringify(result.user))
   return result.user
 }

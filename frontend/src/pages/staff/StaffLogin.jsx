@@ -13,7 +13,7 @@ function StaffLogin() {
     try {
       const user = await login(email, password)
       if (user.type !== 'Staff') throw new Error('This account does not have staff access.')
-      sessionStorage.setItem('staff-session', user.email)
+      localStorage.setItem('staff-session', user.email)
       window.location.assign('/staff/dashboard')
     } catch (requestError) {
       setError(requestError.message)

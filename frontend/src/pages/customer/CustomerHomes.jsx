@@ -18,10 +18,28 @@ const Icon = ({ name }) => {
     coordinator: (<><circle cx="12" cy="8" r="3" /><path d="M5 20c.4-3.7 3-6 7-6s6.6 2.3 7 6M12 3v2M5 8H3M21 8h-2" /></>),
     other: (<><circle cx="6" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="18" cy="12" r="1" /></>),
     arrow: <path d="M5 12h14m-6-6 6 6-6 6" />,
+    back: <path d="M19 12H5m6 6-6-6 6-6" />,
     check: <path d="m5 12.5 4.2 4.2L19 7" />,
   }
 
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
+}
+
+function resolveServiceIcon(service) {
+  if (service.icon && service.icon !== 'other') return service.icon
+  const label = `${service.label || ''} ${service.name || ''}`.toLowerCase()
+  if (label.includes('staff')) return 'staff'
+  if (label.includes('chair')) return 'chair'
+  if (label.includes('water')) return 'water'
+  if (label.includes('coffee')) return 'coffee'
+  if (label.includes('food') || label.includes('meal')) return 'food'
+  if (label.includes('clean')) return 'cleaning'
+  if (label.includes('aircon') || label.includes('air con') || label.includes('temperature')) return 'aircon'
+  if (label.includes('restroom') || label.includes('bathroom')) return 'restroom'
+  if (label.includes('parking')) return 'parking'
+  if (label.includes('suppl')) return 'supplies'
+  if (label.includes('coordinator')) return 'coordinator'
+  return 'other'
 }
 
 function CustomerHomes() {
@@ -50,6 +68,7 @@ function CustomerHomes() {
         method: 'POST',
         body: JSON.stringify({
           request: selectedService.label || selectedService.name,
+          icon: resolveServiceIcon(selectedService),
           requestedBy: requestedBy.trim(),
           location: requestLocation.trim(),
           details: details.trim(),
@@ -88,6 +107,9 @@ function CustomerHomes() {
         </div>
       </header>
       {logoutConfirmOpen && <div className="notification-overlay" role="presentation" onClick={() => setLogoutConfirmOpen(false)}><section className="notification-modal account-action-modal" role="dialog" aria-modal="true" aria-labelledby="customer-logout-title" onClick={(event) => event.stopPropagation()}><div className="account-action-icon account-action-icon-danger">↪</div><p className="admin-kicker">Account security</p><h2 id="customer-logout-title">Log out now?</h2><p>Your chapel session will end and you will need to sign in again.</p><div className="modal-actions"><button type="button" onClick={() => setLogoutConfirmOpen(false)}>Stay signed in</button><button className="delete-confirm-button" type="button" onClick={() => {
+              localStorage.removeItem('chapel-session')
+              localStorage.removeItem('cosmocare-token')
+              localStorage.removeItem('cosmocare-user')
               sessionStorage.removeItem('chapel-session')
               sessionStorage.removeItem('cosmocare-token')
               sessionStorage.removeItem('cosmocare-user')
@@ -108,18 +130,10 @@ function CustomerHomes() {
               <textarea id="request-details" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Anything our team should know?" rows="3" />
               {error && <p className="customer-login-error" role="alert">{error}</p>}
               <div className="request-form-actions">
-                <button className="secondary-button" type="button" onClick={() => { setSelectedService(null); setError('') }}>Back</button>
+                <button className="secondary-button back-button" type="button" onClick={() => { setSelectedService(null); setError('') }}><Icon name="back" /> Back to services</button>
                 <button className="request-submit" type="submit" disabled={submitting}>{submitting ? 'Sending…' : 'Send request'}</button>
               </div>
             </form>
-          </section>
-        ) : sent ? (
-          <section className="confirmation-card" aria-live="polite">
-            <div className="confirmation-icon"><Icon name="check" /></div>
-            <p className="eyebrow">Request received</p>
-            <h1>We&apos;re on our way.</h1>
-            <p className="confirmation-copy">Our team has been notified about your request for <strong>{sent.label.toLowerCase()}</strong>. Someone will be with you shortly.</p>
-            <button className="secondary-button" type="button" onClick={() => setSent(null)}>Make another request</button>
           </section>
         ) : (
           <>
@@ -133,7 +147,7 @@ function CustomerHomes() {
               <div className="service-grid">
                 {services.map((service) => (
                   <button className={`service-card ${service.tone}`} type="button" key={service.id} onClick={() => selectService(service)}>
-                    <span className="service-icon"><Icon name={service.icon || 'other'} /></span>
+                    <span className="service-icon"><Icon name={resolveServiceIcon(service)} /></span>
                     <span className="service-text"><strong>{service.label || service.name}</strong><small>{service.description}</small></span>
                     <span className="card-arrow"><Icon name="arrow" /></span>
                   </button>
@@ -149,6 +163,17 @@ function CustomerHomes() {
           </>
         )}
       </main>
+      {sent && <div className="notification-overlay" role="presentation" onClick={() => setSent(null)}>
+        <section className="notification-modal account-action-modal" role="dialog" aria-modal="true" aria-labelledby="request-success-title" onClick={(event) => event.stopPropagation()}>
+          <div className="account-action-icon account-action-icon-success">✓</div>
+          <p className="admin-kicker">Request received</p>
+          <h2 id="request-success-title">Request sent successfully</h2>
+          <p>Our team has been notified about your request for <strong>{sent.label.toLowerCase()}</strong>. Someone will be with you shortly.</p>
+          <div className="modal-actions">
+            <button className="save-services-button" type="button" onClick={() => setSent(null)}>Done</button>
+          </div>
+        </section>
+      </div>}
       <footer className="site-footer"><span>Quiet care. Thoughtful service.</span><span className="footer-divider" /><span>CosmoCare Servicing <b>•</b> 2026</span></footer>
     </div>
   )
