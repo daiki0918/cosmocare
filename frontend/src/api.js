@@ -1,5 +1,9 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL
-const API_URL = (configuredApiUrl || `http://${window.location.hostname}:5000`).replace(/\/+$/, '')
+const productionApiUrl = 'https://cosmocare-backend.onrender.com'
+const defaultApiUrl = window.location.hostname.endsWith('.vercel.app')
+  ? productionApiUrl
+  : `http://${window.location.hostname}:5000`
+const API_URL = (configuredApiUrl || defaultApiUrl).replace(/\/+$/, '')
 export { API_URL }
 
 function clearStoredSession() {
