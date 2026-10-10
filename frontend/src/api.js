@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`
+const configuredApiUrl = import.meta.env.VITE_API_URL
+const API_URL = (configuredApiUrl || `http://${window.location.hostname}:5000`).replace(/\/+$/, '')
 export { API_URL }
 
 function clearStoredSession() {
@@ -15,14 +16,22 @@ function redirectToLogin() {
 
 export async function api(path, options = {}) {
   const token = localStorage.getItem('cosmocare-token')
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  })
+  let response
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    })
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error('Unable to connect to the CosmoCare server. Make sure the backend is running and the API URL is configured correctly.', { cause: error })
+    }
+    throw error
+  }
   const body = response.status === 204 ? null : await response.json()
   if (response.status === 401 && token && path !== '/api/auth/login') {
     clearStoredSession()
