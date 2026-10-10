@@ -52,6 +52,7 @@ function NavIcon({ name }) {
 
 function AdminDashboard() {
   const [active, setActive] = useState('dashboard')
+  const [currentDate, setCurrentDate] = useState(() => new Date())
   const [menuOpen, setMenuOpen] = useState(false)
   const isAdmin = Boolean(localStorage.getItem('admin-session'))
   const [services, setServices] = useState([])
@@ -79,6 +80,10 @@ function AdminDashboard() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const currentUser = JSON.parse(localStorage.getItem('cosmocare-user') || 'null')
   useEffect(() => {
+    const dateRefresh = setInterval(() => setCurrentDate(new Date()), 60000)
+    return () => clearInterval(dateRefresh)
+  }, [])
+  useEffect(() => {
     const refresh = () => {
       api('/api/requests').then((items) => setRequestItems(items.map((item) => ({ ...item, id: item._id })))).catch((error) => setRequestError(error.message))
       if (isAdmin) api('/api/requests?deleted=true').then((items) => setDeletedRequestItems(items.map((item) => ({ ...item, id: item._id })))).catch((error) => setRequestError(error.message))
@@ -95,6 +100,13 @@ function AdminDashboard() {
   }, [isAdmin])
   const [servicePage, setServicePage] = useState(1)
   const adminNotifications = notifications.filter((item) => item.recipient === 'admin')
+  const currentDateLabel = currentDate.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Manila',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
   const pendingRequests = requestItems.filter((item) => item.status === 'Pending').length
   const completedRequests = requestItems.filter((item) => item.status === 'Completed').length
   const activeChapels = new Set(requestItems.map((item) => item.chapel).filter(Boolean)).size
@@ -247,7 +259,7 @@ function AdminDashboard() {
 
       <main className="admin-main">
         <header className="admin-topbar">
-          <div><p className="admin-kicker">Tuesday, October 6, 2026</p><h1>{active === 'dashboard' ? 'Good morning, Admin' : navItems.find(([id]) => id === active)?.[1] || 'Settings'}</h1></div>
+          <div><p className="admin-kicker">{currentDateLabel}</p><h1>{active === 'dashboard' ? 'Good morning, Admin' : navItems.find(([id]) => id === active)?.[1] || 'Settings'}</h1></div>
           <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><NotificationBell notifications={adminNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
         </header>
 
