@@ -103,7 +103,7 @@ function StaffDashboard() {
             <section className="admin-panel request-panel">
               <div className="panel-heading"><div><p className="admin-kicker">Assigned to your team</p><h2>Recent customer requests</h2></div><span className="availability"><b /> Live updates</span></div>
               <div className="request-table">
-                <div className="request-row request-row-header"><span>Request</span><span>Location</span><span>Received</span><span>Status</span></div>
+                <div className="request-row request-row-header"><span>Request / Chapel</span><span>Location</span><span>Received</span><span>Status</span></div>
                 {visibleRequests.map((item) => <StaffRequestRow item={item} key={item.id} onUpdate={updateRequest} />)}
               </div>
               <div className="table-pagination"><span>Showing up to {Math.min(TABLE_PAGE_SIZE, requestItems.length)} per page · {requestItems.length} total</span>{requestPages > 1 && <div className="pagination"><button type="button" disabled={requestPage === 1} onClick={() => setRequestPage(requestPage - 1)}>Previous</button><span>Page {requestPage} of {requestPages}</span><button type="button" disabled={requestPage === requestPages} onClick={() => setRequestPage(requestPage + 1)}>Next</button></div>}</div>
