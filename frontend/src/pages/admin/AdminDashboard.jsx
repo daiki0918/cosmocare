@@ -5,6 +5,8 @@ import StaffAccounts from './StaffAccounts.jsx'
 import Reports from './Reports.jsx'
 import ActivityLogs from './ActivityLogs.jsx'
 import AdminSettings from './AdminSettings.jsx'
+import RequestSoundControl from '../../RequestSoundControl.jsx'
+import { playRequestAlert } from '../../requestSound.js'
 import '../../App.css'
 
 const TABLE_PAGE_SIZE = 5
@@ -13,6 +15,7 @@ const BRANCHES = ['All branches', 'Argao', 'Bogo', 'Car-Car', 'Corduva', 'Danao'
 const navItems = [
   ['dashboard', 'Dashboard'],
   ['requests', 'Customer Requests'],
+  ['inbox', 'Customer Support'],
   ['accounts', 'Staff & Chapel Accounts'],
   ['services', 'Service Offers'],
   ['reports', 'Reports'],
@@ -40,6 +43,7 @@ function NavIcon({ name }) {
   const icons = {
     dashboard: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
     requests: <><path d="M5 5h14v14H5z" /><path d="M8 9h8M8 13h5" /><path d="M8 3v4M16 3v4" /></>,
+    inbox: <><path d="M4 5h16v12h-5l-3 3-3-3H4z" /><path d="M8 9h8M8 13h5" /></>,
     accounts: <><circle cx="12" cy="8" r="3" /><path d="M5 20c.4-3.7 3-6 7-6s6.6 2.3 7 6" /></>,
     reports: <><path d="M5 19V5M5 19h15" /><path d="m8 15 3-4 3 2 4-6" /></>,
     services: <><path d="M12 3 14.8 8.2 20.5 9l-4.1 4 1 5.7-5.4-2.7-5.4 2.7 1-5.7-4.1-4 5.7-.8L12 3Z" /><path d="M12 7.5v5M9.5 10h5" /></>,
@@ -76,9 +80,19 @@ function AdminDashboard() {
   const [selectedRequestIds, setSelectedRequestIds] = useState([])
   const [deletingRequestIds, setDeletingRequestIds] = useState([])
   const [requestError, setRequestError] = useState('')
+  const [supportSearch, setSupportSearch] = useState('')
+  const [supportFilter, setSupportFilter] = useState('all')
+  const [selectedSupportId, setSelectedSupportId] = useState(null)
+  const [supportInboxError, setSupportInboxError] = useState('')
   const [requestBranch, setRequestBranch] = useState('All branches')
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [requestSoundEnabled, setRequestSoundEnabled] = useState(false)
+  const requestSoundEnabledRef = useRef(false)
   const currentUser = JSON.parse(localStorage.getItem('cosmocare-user') || 'null')
+  const changeRequestSound = (enabled) => {
+    requestSoundEnabledRef.current = enabled
+    setRequestSoundEnabled(enabled)
+  }
   useEffect(() => {
     const dateRefresh = setInterval(() => setCurrentDate(new Date()), 60000)
     return () => clearInterval(dateRefresh)
@@ -89,10 +103,14 @@ function AdminDashboard() {
       if (isAdmin) api('/api/requests?deleted=true').then((items) => setDeletedRequestItems(items.map((item) => ({ ...item, id: item._id })))).catch((error) => setRequestError(error.message))
       api('/api/notifications').then(setNotifications).catch(() => {})
     }
+    const handleRequestCreated = () => {
+      refresh()
+      if (requestSoundEnabledRef.current) void playRequestAlert()
+    }
     refresh()
     api('/api/services').then(setServices).catch((requestError) => setServiceError(requestError.message))
     const stream = new EventSource(`${API_URL}/api/requests/stream?token=${encodeURIComponent(localStorage.getItem('cosmocare-token') || '')}`)
-    stream.addEventListener('request-created', refresh)
+    stream.addEventListener('request-created', handleRequestCreated)
     stream.addEventListener('request-updated', refresh)
     stream.addEventListener('request-deleted', refresh)
     stream.addEventListener('notification-created', refresh)
@@ -100,6 +118,14 @@ function AdminDashboard() {
   }, [isAdmin])
   const [servicePage, setServicePage] = useState(1)
   const adminNotifications = notifications.filter((item) => item.recipient === 'admin')
+  const supportMessages = adminNotifications.filter((item) => item.title === 'Customer support question')
+  const unreadSupportMessages = supportMessages.filter((item) => !item.read).length
+  const filteredSupportMessages = supportMessages.filter((item) => {
+    if (supportFilter === 'unread' && item.read) return false
+    const query = supportSearch.trim().toLowerCase()
+    return !query || [item.sender, item.title, item.message].some((value) => String(value || '').toLowerCase().includes(query))
+  })
+  const selectedSupportMessage = filteredSupportMessages.find((item) => item._id === selectedSupportId) || filteredSupportMessages[0] || null
   const currentDateLabel = currentDate.toLocaleDateString('en-US', {
     timeZone: 'Asia/Manila',
     weekday: 'long',
@@ -114,7 +140,7 @@ function AdminDashboard() {
   const requestRows = displayedRequestItems.filter((item) => {
     const query = requestSearch.trim().toLowerCase()
     const matchesBranch = requestBranch === 'All branches' || (item.branch || item.createdBy?.branch || item.createdBy?.chapel) === requestBranch
-    return matchesBranch && (!query || [item.request, item.requestedBy, item.branch, item.chapelName, item.chapel, item.location, item.details, item.id].some((value) => String(value || '').toLowerCase().includes(query)))
+    return matchesBranch && (!query || [item.request, item.branch, item.chapelName, item.chapel, item.createdBy?.name, item.createdBy?.email, item.id].some((value) => String(value || '').toLowerCase().includes(query)))
   })
   const requestPages = Math.max(1, Math.ceil(requestRows.length / TABLE_PAGE_SIZE))
   const visibleRequests = requestRows.slice((requestPage - 1) * TABLE_PAGE_SIZE, requestPage * TABLE_PAGE_SIZE)
@@ -140,10 +166,14 @@ function AdminDashboard() {
       setDeletingRequestIds([])
     }
   }
-  const updateRequest = (id, changes) => {
-    api(`/api/requests/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }).then((updated) => {
+  const updateRequest = async (id, changes) => {
+    setRequestError('')
+    try {
+      const updated = await api(`/api/requests/${id}`, { method: 'PATCH', body: JSON.stringify(changes) })
       setRequestItems((items) => items.map((item) => item.id === id ? { ...item, ...updated, id: updated._id } : item))
-    }).catch(() => {})
+    } catch (error) {
+      setRequestError(error.message)
+    }
   }
   const servicePages = Math.max(1, Math.ceil(services.length / TABLE_PAGE_SIZE))
   const visibleServices = services.slice((servicePage - 1) * TABLE_PAGE_SIZE, servicePage * TABLE_PAGE_SIZE)
@@ -153,6 +183,17 @@ function AdminDashboard() {
     }).catch(() => {})
     setSelectedNotification(item)
     setBellOpen(false)
+  }
+  const openSupportMessage = async (item) => {
+    setSelectedSupportId(item._id)
+    setSupportInboxError('')
+    if (item.read) return
+    try {
+      const updated = await api(`/api/notifications/${item._id}/read`, { method: 'PATCH' })
+      setNotifications((items) => items.map((notification) => notification._id === updated._id ? updated : notification))
+    } catch (error) {
+      setSupportInboxError(error.message)
+    }
   }
 
   const openServiceForm = (service = null) => {
@@ -237,10 +278,11 @@ function AdminDashboard() {
         </div>
         <nav className={`admin-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Admin navigation">
           <p className="admin-nav-label">Workspace</p>
-          {navItems.filter(([id]) => isAdmin || !['accounts', 'services'].includes(id)).map(([id, label]) => (
+          {navItems.filter(([id]) => isAdmin || !['accounts', 'services', 'inbox'].includes(id)).map(([id, label]) => (
             <button className={active === id ? 'active' : ''} type="button" key={id} onClick={() => { setActive(id); setMenuOpen(false) }}>
             <NavIcon name={id} />
             {label}
+            {id === 'inbox' && unreadSupportMessages > 0 && <span className="admin-nav-count">{unreadSupportMessages > 9 ? '9+' : unreadSupportMessages}</span>}
             </button>
           ))}
           {isAdmin && (
@@ -260,7 +302,7 @@ function AdminDashboard() {
       <main className="admin-main">
         <header className="admin-topbar">
           <div><p className="admin-kicker">{currentDateLabel}</p><h1>{active === 'dashboard' ? 'Good morning, Admin' : navItems.find(([id]) => id === active)?.[1] || 'Settings'}</h1></div>
-          <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><NotificationBell notifications={adminNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
+          <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><RequestSoundControl enabled={requestSoundEnabled} onEnabledChange={changeRequestSound} /><NotificationBell notifications={adminNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
         </header>
 
         {active === 'dashboard' && (
@@ -274,7 +316,7 @@ function AdminDashboard() {
             <section className="admin-panel request-panel">
               <div className="panel-heading"><div><p className="admin-kicker">Live activity</p><h2>Recent customer requests</h2></div><button type="button" onClick={() => setActive('requests')}>View all requests →</button></div>
               <div className="request-table">
-                <div className="request-row request-row-header"><span>Request</span><span>Location</span><span>Received</span><span>Status</span></div>
+                <div className="request-row request-row-header"><span>Request</span><span>Received</span><span>Status</span></div>
                 {visibleRequests.slice(0, TABLE_PAGE_SIZE).map((item, index) => <RequestRow key={`dashboard-${item.id}-${index}`} item={item} onUpdate={updateRequest} />)}
               </div>
               <TablePagination page={requestPage} pages={requestPages} total={requestRows.length} onPageChange={setRequestPage} />
@@ -283,7 +325,47 @@ function AdminDashboard() {
         )}
 
 
-        {active === 'requests' && <section className="admin-panel request-panel"><div className="panel-heading"><div><p className="admin-kicker">Operations</p><h2>Customer requests</h2></div><button type="button">Export list ↓</button></div><div className="request-toolbar"><input className="request-search" type="search" value={requestSearch} onChange={(event) => { setRequestSearch(event.target.value); setRequestPage(1) }} placeholder="Search requests, chapel, requester, or location..." /><select className="request-branch-select" value={requestBranch} onChange={(event) => { setRequestBranch(event.target.value); setRequestPage(1) }} aria-label="Filter requests by branch">{BRANCHES.map((branch) => <option key={branch}>{branch}</option>)}</select><div className="request-view-tabs"><button className={requestView === 'active' ? 'active' : ''} type="button" onClick={() => { setRequestView('active'); setRequestPage(1); setSelectedRequestIds([]) }}>Active</button><button className={requestView === 'deleted' ? 'active' : ''} type="button" onClick={() => { setRequestView('deleted'); setRequestPage(1); setSelectedRequestIds([]) }}>Deleted</button></div></div>{requestError && <p className="account-form-error" role="alert">{requestError}</p>}{requestView === 'active' && selectedRequestIds.length > 0 && <div className="request-bulk-actions"><span>{selectedRequestIds.length} request{selectedRequestIds.length === 1 ? '' : 's'} selected</span><button className="delete-confirm-button" type="button" onClick={confirmDeleteRequests}>Delete selected</button></div>}<div className="request-table"><div className="request-row request-row-header"><span><input type="checkbox" checked={requestView === 'active' && allVisibleRequestsSelected} disabled={requestView === 'deleted'} onChange={toggleSelectAllRequests} aria-label="Select all visible requests" /> Request / Chapel</span><span>Location</span><span>Received</span><span>Status</span></div>{visibleRequests.length === 0 && <p className="request-empty">{requestView === 'deleted' ? 'No deleted requests.' : 'No requests found.'}</p>}{visibleRequests.map((item, index) => <RequestRow key={`${item.id}-${index}`} item={item} onUpdate={updateRequest} selectable={requestView === 'active'} selected={selectedRequestIds.includes(item.id)} onSelect={() => toggleRequestSelection(item.id)} />)}</div><TablePagination page={requestPage} pages={requestPages} total={requestRows.length} onPageChange={setRequestPage} /></section>}
+        {active === 'requests' && <section className="admin-panel request-panel"><div className="panel-heading"><div><p className="admin-kicker">Operations</p><h2>Customer requests</h2></div><button type="button">Export list ↓</button></div><div className="request-toolbar"><input className="request-search" type="search" value={requestSearch} onChange={(event) => { setRequestSearch(event.target.value); setRequestPage(1) }} placeholder="Search requests, chapel, or branch..." /><select className="request-branch-select" value={requestBranch} onChange={(event) => { setRequestBranch(event.target.value); setRequestPage(1) }} aria-label="Filter requests by branch">{BRANCHES.map((branch) => <option key={branch}>{branch}</option>)}</select><div className="request-view-tabs"><button className={requestView === 'active' ? 'active' : ''} type="button" onClick={() => { setRequestView('active'); setRequestPage(1); setSelectedRequestIds([]) }}>Active</button><button className={requestView === 'deleted' ? 'active' : ''} type="button" onClick={() => { setRequestView('deleted'); setRequestPage(1); setSelectedRequestIds([]) }}>Deleted</button></div></div>{requestError && <p className="account-form-error" role="alert">{requestError}</p>}{requestView === 'active' && selectedRequestIds.length > 0 && <div className="request-bulk-actions"><span>{selectedRequestIds.length} request{selectedRequestIds.length === 1 ? '' : 's'} selected</span><button className="delete-confirm-button" type="button" onClick={confirmDeleteRequests}>Delete selected</button></div>}<div className="request-table"><div className="request-row request-row-header"><span><input type="checkbox" checked={requestView === 'active' && allVisibleRequestsSelected} disabled={requestView === 'deleted'} onChange={toggleSelectAllRequests} aria-label="Select all visible requests" /> Request / chapel</span><span>Received</span><span>Status</span></div>{visibleRequests.length === 0 && <p className="request-empty">{requestView === 'deleted' ? 'No deleted requests.' : 'No requests found.'}</p>}{visibleRequests.map((item, index) => <RequestRow key={`${item.id}-${index}`} item={item} onUpdate={updateRequest} selectable={requestView === 'active'} selected={selectedRequestIds.includes(item.id)} onSelect={() => toggleRequestSelection(item.id)} />)}</div><TablePagination page={requestPage} pages={requestPages} total={requestRows.length} onPageChange={setRequestPage} /></section>}
+        {active === 'inbox' && (
+          <section className="admin-support-inbox">
+            <div className="admin-support-hero">
+              <div><p className="admin-kicker">Customer care · Chapel chat</p><h2>Support inbox</h2><p>Questions customers sent from the chapel help chat.</p></div>
+              <span className="admin-support-total"><strong>{supportMessages.length}</strong><small>total messages</small></span>
+            </div>
+            <div className="admin-support-stats">
+              <div><span className="support-stat-icon">✉</span><span><small>All messages</small><strong>{supportMessages.length}</strong></span></div>
+              <div><span className="support-stat-icon unread">●</span><span><small>Needs review</small><strong>{unreadSupportMessages}</strong></span></div>
+              <div><span className="support-stat-icon answered">✓</span><span><small>Reviewed</small><strong>{supportMessages.length - unreadSupportMessages}</strong></span></div>
+            </div>
+            <div className="support-inbox-panel">
+              <div className="support-inbox-toolbar">
+                <label className="support-search-wrap"><span aria-hidden="true">⌕</span><input type="search" value={supportSearch} onChange={(event) => setSupportSearch(event.target.value)} placeholder="Search customer, chapel, or message" aria-label="Search support messages" /></label>
+                <div className="support-filter-tabs" aria-label="Filter support messages">
+                  <button type="button" className={supportFilter === 'all' ? 'active' : ''} onClick={() => setSupportFilter('all')}>All <span>{supportMessages.length}</span></button>
+                  <button type="button" className={supportFilter === 'unread' ? 'active' : ''} onClick={() => setSupportFilter('unread')}>Unread <span>{unreadSupportMessages}</span></button>
+                </div>
+              </div>
+              {supportInboxError && <p className="account-form-error" role="alert">{supportInboxError}</p>}
+              <div className="support-inbox-content">
+                <div className="support-message-list" aria-label="Customer support messages">
+                  {filteredSupportMessages.length === 0 ? (
+                    <div className="support-empty-state"><span>✉</span><strong>{supportMessages.length ? 'No matching messages' : 'Your inbox is clear'}</strong><p>{supportMessages.length ? 'Try another search or show all messages.' : 'Customer questions from the chapel chat will appear here.'}</p></div>
+                  ) : filteredSupportMessages.map((item) => {
+                    const preview = getCustomerSupportContent(item.message)
+                    return <button key={item._id} type="button" className={`support-message-item ${selectedSupportMessage?._id === item._id ? 'selected' : ''} ${item.read ? '' : 'unread'}`} onClick={() => openSupportMessage(item)}>
+                      <span className="support-customer-avatar">{(item.sender || 'C').slice(0, 1).toUpperCase()}</span>
+                      <span className="support-message-summary"><span className="support-message-heading"><strong>{item.sender || 'Chapel customer'}</strong>{!item.read && <i>New</i>}</span><small>{preview.chapel || 'Chapel customer'}</small><span>{preview.question || item.title}</span></span>
+                      <time>{formatNotificationTime(item.createdAt)}</time>
+                    </button>
+                  })}
+                </div>
+                <div className="support-message-detail">
+                  {selectedSupportMessage ? <SupportMessageDetail item={selectedSupportMessage} onMarkRead={() => openSupportMessage(selectedSupportMessage)} /> : <div className="support-detail-placeholder"><span>↖</span><strong>Select a message</strong><p>Choose a customer question to read its full details.</p></div>}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         {active === 'accounts' && <StaffAccounts />}
         {active === 'reports' && <Reports requests={requestItems} />}
         {active === 'audit' && <ActivityLogs />}
@@ -383,9 +465,27 @@ function TablePagination({ page, pages, total, onPageChange }) {
 
 function RequestRow({ item, onUpdate, selectable = false, selected = false, onSelect }) {
   const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : 'new'
-  const requestInfo = <><span className="request-title"><ServiceIcon name={item.icon} /><strong>{item.request}</strong></span><small>Account Name: {item.branch || item.createdBy?.branch || item.createdBy?.chapel || 'Not provided'}</small><small>Chapel room: {item.chapelName || item.chapel || 'Not provided'}</small><small>Requester Name: {item.requestedBy || 'Not provided'}</small><small>Details: {item.details || 'None'}</small></>
+  const requestInfo = (
+    <span className="request-info">
+      <span className="request-title"><ServiceIcon name={item.icon} /><strong>{item.request}</strong></span>
+      <span className="request-meta-grid">
+        <small className="request-meta-item"><b>Chapel account</b><span>{item.createdBy?.name || 'Not provided'}{item.createdBy?.email ? ` · ${item.createdBy.email}` : ''}</span></small>
+        <small className="request-meta-item"><b>Chapel</b><span>{item.chapelName || item.chapel || item.createdBy?.chapel || 'Not provided'}</span></small>
+        <small className="request-meta-item"><b>Branch</b><span>{item.branch || item.createdBy?.branch || 'Not provided'}</span></small>
+      </span>
+    </span>
+  )
   const status = selectable ? <select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, { status: event.target.value })}><option>Pending</option><option>In progress</option><option>Completed</option></select> : <span className={`request-status ${tone}`}>{item.status}</span>
-  return <div className="request-row request-management-row"><span>{selectable && <input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${item.request}`} />} {requestInfo}</span><span><small>Location: {item.location || 'Not provided'}</small></span><span>{item.createdAt ? new Date(item.createdAt).toLocaleString() : item.time}</span><span>{status}</span></div>
+  return (
+    <div className="request-row request-management-row">
+      <span className="request-cell request-cell-request">
+        {selectable && <input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${item.request}`} />}
+        {requestInfo}
+      </span>
+      <span className="request-cell" data-label="Received"><time>{item.createdAt ? new Date(item.createdAt).toLocaleString() : item.time}</time></span>
+      <span className="request-cell" data-label="Status">{status}</span>
+    </div>
+  )
 }
 
 function NotificationMenu({ notifications, onOpen }) {
@@ -394,6 +494,31 @@ function NotificationMenu({ notifications, onOpen }) {
 
 function NotificationModal({ notification, onClose }) {
   return <div className="notification-overlay" role="presentation" onClick={onClose}><section className="notification-modal" role="dialog" aria-modal="true" aria-labelledby="admin-notification-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Close notification" onClick={onClose}>×</button><p className="admin-kicker">From {notification.sender || 'team member'}</p><h2 id="admin-notification-title">{notification.title}</h2><p>{notification.message}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></section></div>
+}
+
+function getCustomerSupportContent(message = '') {
+  const match = message.match(/(?:^|\n\n)Chapel:\s*([^\n]*)\nAccount:\s*([^\n]*)$/)
+  return {
+    question: match ? message.slice(0, match.index).trim() : message.trim(),
+    chapel: match?.[1]?.trim() || '',
+    account: match?.[2]?.trim() || '',
+  }
+}
+
+function formatNotificationTime(value) {
+  if (!value) return 'Just now'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Recently' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function SupportMessageDetail({ item }) {
+  const content = getCustomerSupportContent(item.message)
+  return <article className="support-detail-card">
+    <div className="support-detail-topline"><span className="support-detail-tag"><i /> Customer question</span><time>{formatNotificationTime(item.createdAt)}</time></div>
+    <div className="support-detail-person"><span className="support-customer-avatar large">{(item.sender || 'C').slice(0, 1).toUpperCase()}</span><div><p className="admin-kicker">Sent from chapel help chat</p><h3>{item.sender || content.account || 'Chapel customer'}</h3><small>{content.chapel || 'Chapel not specified'}</small></div><span className={`support-read-state ${item.read ? 'read' : ''}`}>{item.read ? 'Reviewed' : 'Unread'}</span></div>
+    <div className="support-question-body"><p className="admin-kicker">Customer message</p><p>{content.question || 'No message content provided.'}</p></div>
+    <div className="support-detail-footer"><span>Customer support question</span><span>{item.read ? 'Opened by admin' : 'Select this message in the list to mark it reviewed'}</span></div>
+  </article>
 }
 
 export default AdminDashboard

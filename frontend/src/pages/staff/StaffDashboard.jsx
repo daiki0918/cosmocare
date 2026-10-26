@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import logo from '../../assets/Logo.png'
 import { api, API_URL } from '../../api.js'
+import RequestSoundControl from '../../RequestSoundControl.jsx'
+import { playRequestAlert } from '../../requestSound.js'
 import '../../App.css'
 
 const TABLE_PAGE_SIZE = 5
@@ -8,6 +10,7 @@ const TABLE_PAGE_SIZE = 5
 function StaffDashboard() {
   const currentUser = JSON.parse(localStorage.getItem('cosmocare-user') || 'null')
   const [active, setActive] = useState('requests')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [suggestionDetails, setSuggestionDetails] = useState('')
   const [showSuggestionModal, setShowSuggestionModal] = useState(false)
@@ -19,24 +22,42 @@ function StaffDashboard() {
   const [selectedNotification, setSelectedNotification] = useState(null)
   const [requestPage, setRequestPage] = useState(1)
   const [requestItems, setRequestItems] = useState([])
+  const [requestError, setRequestError] = useState('')
+  const [requestSoundEnabled, setRequestSoundEnabled] = useState(false)
+  const requestSoundEnabledRef = useRef(false)
+  const changeRequestSound = (enabled) => {
+    requestSoundEnabledRef.current = enabled
+    setRequestSoundEnabled(enabled)
+  }
   useEffect(() => {
     const refresh = () => {
-      api('/api/requests').then((items) => setRequestItems(items.map((item) => ({ ...item, id: item._id })))).catch(() => {})
-      api('/api/notifications').then(setNotifications).catch(() => {})
+      api('/api/requests').then((items) => {
+        setRequestItems(items.map((item) => ({ ...item, id: item._id })))
+        setRequestError('')
+      }).catch((requestError) => setRequestError(requestError.message))
+      api('/api/notifications').then(setNotifications).catch(() => { })
+    }
+    const handleRequestCreated = () => {
+      refresh()
+      if (requestSoundEnabledRef.current) void playRequestAlert()
     }
     refresh()
     const stream = new EventSource(`${API_URL}/api/requests/stream?token=${encodeURIComponent(localStorage.getItem('cosmocare-token') || '')}`)
-    stream.addEventListener('request-created', refresh)
+    stream.addEventListener('request-created', handleRequestCreated)
     stream.addEventListener('request-updated', refresh)
     stream.addEventListener('notification-created', refresh)
     return () => stream.close()
   }, [])
   const requestPages = Math.max(1, Math.ceil(requestItems.length / TABLE_PAGE_SIZE))
   const visibleRequests = requestItems.slice((requestPage - 1) * TABLE_PAGE_SIZE, requestPage * TABLE_PAGE_SIZE)
-  const updateRequest = (id, status) => {
-    api(`/api/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then((updated) => {
+  const updateRequest = async (id, status) => {
+    setRequestError('')
+    try {
+      const updated = await api(`/api/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       setRequestItems((items) => items.map((item) => item.id === id ? { ...item, ...updated, id: updated._id } : item))
-    }).catch(() => {})
+    } catch (requestError) {
+      setRequestError(requestError.message)
+    }
   }
   const staffNotifications = notifications.filter((item) => item.recipient === 'staff')
   const pendingRequests = requestItems.filter((item) => item.status === 'Pending').length
@@ -45,7 +66,7 @@ function StaffDashboard() {
   const openNotification = (item) => {
     api(`/api/notifications/${item._id}/read`, { method: 'PATCH' }).then((updated) => {
       setNotifications((items) => items.map((notification) => notification._id === updated._id ? updated : notification))
-    }).catch(() => {})
+    }).catch(() => { })
     setSelectedNotification(item)
     setBellOpen(false)
   }
@@ -68,16 +89,21 @@ function StaffDashboard() {
             <span className="brand-mark"><img src={logo} alt="" /></span>
             <span><strong>CosmoCare</strong><small>Staff portal</small></span>
           </a>
+          <button className="admin-menu-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            <span />
+            <span />
+            <span />
+          </button>
         </div>
-        <nav className="admin-nav staff-nav" aria-label="Staff navigation">
+        <nav className={`admin-nav staff-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Staff navigation">
           <p className="admin-nav-label">Workspace</p>
-          <button className={active === 'requests' ? 'active' : ''} type="button" onClick={() => setActive('requests')}>
+          <button className={active === 'requests' ? 'active' : ''} type="button" onClick={() => { setActive('requests'); setMenuOpen(false) }}>
             <span className="nav-svg-wrap">▤</span> Customer Requests
           </button>
-          <button className={active === 'profile' ? 'active' : ''} type="button" onClick={() => setActive('profile')}>
+          <button className={active === 'profile' ? 'active' : ''} type="button" onClick={() => { setActive('profile'); setMenuOpen(false) }}>
             <span className="nav-svg-wrap">◎</span> My profile
           </button>
-          <button className={active === 'suggest' ? 'active' : ''} type="button" onClick={() => setActive('suggest')}>
+          <button className={active === 'suggest' ? 'active' : ''} type="button" onClick={() => { setActive('suggest'); setMenuOpen(false) }}>
             <span className="nav-svg-wrap">✦</span> Suggest a service
           </button>
         </nav>
@@ -90,7 +116,7 @@ function StaffDashboard() {
       <main className="admin-main">
         <header className="admin-topbar">
           <div><p className="admin-kicker">Staff workspace</p><h1>{active === 'requests' ? 'Customer requests' : active === 'suggest' ? 'Suggest a service' : 'My profile'}</h1></div>
-          <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><NotificationBell notifications={staffNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
+          <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><RequestSoundControl enabled={requestSoundEnabled} onEnabledChange={changeRequestSound} /><NotificationBell notifications={staffNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
         </header>
 
         {active === 'requests' ? (
@@ -102,8 +128,10 @@ function StaffDashboard() {
             </section>
             <section className="admin-panel request-panel">
               <div className="panel-heading"><div><p className="admin-kicker">Assigned to your team</p><h2>Recent customer requests</h2></div><span className="availability"><b /> Live updates</span></div>
+              {requestError && <p className="account-form-error" role="alert">{requestError}</p>}
               <div className="request-table">
-                <div className="request-row request-row-header"><span>Request / Chapel</span><span>Location</span><span>Received</span><span>Status</span></div>
+                <div className="request-row request-row-header"><span>Request</span><span>Received</span><span>Status</span></div>
+                {visibleRequests.length === 0 && <p className="request-empty">{requestError ? 'Requests could not be loaded.' : 'No customer requests for your branch yet.'}</p>}
                 {visibleRequests.map((item) => <StaffRequestRow item={item} key={item.id} onUpdate={updateRequest} />)}
               </div>
               <div className="table-pagination"><span>Showing up to {Math.min(TABLE_PAGE_SIZE, requestItems.length)} per page · {requestItems.length} total</span>{requestPages > 1 && <div className="pagination"><button type="button" disabled={requestPage === 1} onClick={() => setRequestPage(requestPage - 1)}>Previous</button><span>Page {requestPage} of {requestPages}</span><button type="button" disabled={requestPage === requestPages} onClick={() => setRequestPage(requestPage + 1)}>Next</button></div>}</div>
@@ -117,7 +145,7 @@ function StaffDashboard() {
               <button className="save-services-button" type="button" onClick={() => { setSuggestionError(''); setSuggestionSent(false); setShowSuggestionModal(true) }}>Open suggestion form</button>
             </section>
           ) : (
-          <section className="admin-panel staff-profile-panel"><div className="panel-heading"><div><p className="admin-kicker">Account information</p><h2>My profile</h2></div><span className="suggestion-badge">Active account</span></div><div className="profile-card"><div className="profile-avatar">{(currentUser?.name || 'User').slice(0, 2).toUpperCase()}</div><div><strong>{currentUser?.name || 'Staff member'}</strong><small>{currentUser?.email || 'No email available'}</small><span>Assigned branch: <b>{currentUser?.chapel || 'Not assigned'}</b></span></div></div><p className="service-offers-help">Your branch assignment controls which customer requests and branch messages appear in your workspace.</p></section>
+            <section className="admin-panel staff-profile-panel"><div className="panel-heading"><div><p className="admin-kicker">Account information</p><h2>My profile</h2></div><span className="suggestion-badge">Active account</span></div><div className="profile-card"><div className="profile-avatar">{(currentUser?.name || 'User').slice(0, 2).toUpperCase()}</div><div><strong>{currentUser?.name || 'Staff member'}</strong><small>{currentUser?.email || 'No email available'}</small><span>Assigned branch: <b>{currentUser?.chapel || 'Not assigned'}</b></span></div></div><p className="service-offers-help">Your branch assignment controls which customer requests and branch messages appear in your workspace.</p></section>
           )
         )}
       </main>
@@ -172,7 +200,22 @@ export default StaffDashboard
 
 function StaffRequestRow({ item, onUpdate }) {
   const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : 'new'
-  return <div className="request-row request-management-row"><span><span className="request-title"><ServiceIcon name={item.icon} /><strong>{item.request}</strong></span><small>Account Name: {item.createdBy?.name || 'Not provided'}</small><small>Chapel Room: {item.chapel || item.createdBy?.chapel || 'Not provided'}</small><small>Requester: {item.requestedBy || 'Not provided'}</small><small>Details: {item.details || 'None'}</small></span><span><small>Location: {item.location || 'Not provided'}</small></span><span>{item.createdAt ? new Date(item.createdAt).toLocaleString() : item.time}</span><span><select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, event.target.value)}><option>Pending</option><option>In progress</option><option>Completed</option></select></span></div>
+  return (
+    <div className="request-row request-management-row">
+      <span className="request-cell request-cell-request">
+        <span className="request-info">
+          <span className="request-title"><ServiceIcon name={item.icon} /><strong>{item.request}</strong></span>
+          <span className="request-meta-grid">
+            <small className="request-meta-item"><b>Chapel account</b><span>{item.createdBy?.name || 'Not provided'}{item.createdBy?.email ? ` · ${item.createdBy.email}` : ''}</span></small>
+            <small className="request-meta-item"><b>Chapel</b><span>{item.chapelName || item.chapel || item.createdBy?.chapel || 'Not provided'}</span></small>
+            <small className="request-meta-item"><b>Branch</b><span>{item.branch || item.createdBy?.branch || 'Not provided'}</span></small>
+          </span>
+        </span>
+      </span>
+      <span className="request-cell" data-label="Received"><time>{item.createdAt ? new Date(item.createdAt).toLocaleString() : item.time}</time></span>
+      <span className="request-cell" data-label="Status"><select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, event.target.value)}><option>Pending</option><option>In progress</option><option>Completed</option></select></span>
+    </div>
+  )
 }
 
 function ServiceIcon({ name = 'other' }) {
