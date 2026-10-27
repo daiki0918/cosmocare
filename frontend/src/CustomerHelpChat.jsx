@@ -64,10 +64,63 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
   const [sendingSupport, setSendingSupport] = useState(false)
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
+  const supportHistoryLoaded = useRef(false)
+  const loadedSupportReplyIds = useRef(new Set())
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, open])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    let active = true
+    let loading = false
+    const syncSupportMessages = async () => {
+      if (loading) return
+      loading = true
+      try {
+        const conversations = await api('/api/support/messages')
+        if (!active) return
+
+        const history = conversations.flatMap((conversation) => {
+          const question = String(conversation.message || '').replace(/\n\nChapel:[\s\S]*$/, '').trim()
+          const customerMessage = question
+            ? [{ id: `${conversation._id}-question`, sender: 'user', text: question }]
+            : []
+          const replies = (conversation.replies || []).flatMap((reply, index) => {
+            const id = reply._id || `${conversation._id}-reply-${index}`
+            if (loadedSupportReplyIds.current.has(id)) return []
+            loadedSupportReplyIds.current.add(id)
+            return [{ id, sender: 'admin', text: reply.text }]
+          })
+          return [...customerMessage, ...replies]
+        })
+
+        if (!supportHistoryLoaded.current) {
+          supportHistoryLoaded.current = true
+          if (history.length) {
+            setMessages((items) => items.length === 1 && items[0].id === 'welcome' ? history : [...items, ...history.filter((message) => message.sender === 'admin')])
+          }
+        } else {
+          const newReplies = history.filter((message) => message.sender === 'admin')
+          if (newReplies.length) setMessages((items) => [...items, ...newReplies])
+        }
+        setError('')
+      } catch (requestError) {
+        if (active) setError(requestError.message)
+      } finally {
+        loading = false
+      }
+    }
+
+    void syncSupportMessages()
+    const interval = window.setInterval(syncSupportMessages, 5000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [open])
 
   const addBotMessage = (reply) => {
     setMessages((items) => [...items, { id: `${Date.now()}-${items.length}`, sender: 'bot', ...reply }])
@@ -99,11 +152,18 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
           message: `${message}\n\nChapel: ${currentCustomer?.chapel || currentCustomer?.branch || 'Not provided'}\nAccount: ${currentCustomer?.name || 'Not provided'}`,
         }),
       })
-      setMessages((items) => [...items, {
-        id: `${Date.now()}-sent`,
-        sender: 'bot',
-        text: 'Your message was sent to the CosmoCare support team.',
-      }])
+      setMessages((items) => {
+        const hasQuestion = items.some((item) => item.sender === 'user' && item.text === message)
+        return [
+          ...items,
+          ...(!hasQuestion ? [{ id: `${Date.now()}-user`, sender: 'user', text: message }] : []),
+          {
+            id: `${Date.now()}-sent`,
+            sender: 'bot',
+            text: 'Your message was sent to the CosmoCare support team. An administrator can reply here.',
+          },
+        ]
+      })
       setSupportMessage('')
       setSupportPrompt(false)
     } catch (requestError) {
@@ -132,17 +192,18 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
   }
 
   return (
-    <div className="customer-chat-widget">
+    <div className={`customer-chat-widget ${open ? 'open' : ''}`}>
       {open && (
         <section className="customer-chat-window" role="dialog" aria-label="CosmoCare help and FAQs">
           <header className="customer-chat-header">
             <span className="customer-chat-avatar" aria-hidden="true">CC</span>
-            <div><strong>CosmoCare Help</strong><small><i /> FAQs & support</small></div>
+            <div><strong>CosmoCare Help</strong><small><i /> FAQs & admin support</small></div>
             <button type="button" aria-label="Close help chat" onClick={() => setOpen(false)}>×</button>
           </header>
           <div className="customer-chat-messages" aria-live="polite">
             {messages.map((message) => (
-              <div className={`customer-chat-message ${message.sender}`} key={message.id}>
+              <div className={`customer-chat-message ${message.sender === 'admin' ? 'admin' : message.sender}`} key={message.id}>
+                {message.sender === 'admin' && <span className="customer-chat-sender">CosmoCare support</span>}
                 <p>{message.text}</p>
                 {message.action && <button className="customer-chat-action" type="button" onClick={() => runAction(message)}>{message.action} <span aria-hidden="true">›</span></button>}
                 {message.actionType === 'service-list' && services.length > 0 && (

@@ -360,7 +360,7 @@ function AdminDashboard() {
                   })}
                 </div>
                 <div className="support-message-detail">
-                  {selectedSupportMessage ? <SupportMessageDetail item={selectedSupportMessage} onMarkRead={() => openSupportMessage(selectedSupportMessage)} /> : <div className="support-detail-placeholder"><span>↖</span><strong>Select a message</strong><p>Choose a customer question to read its full details.</p></div>}
+                  {selectedSupportMessage ? <SupportMessageDetail key={selectedSupportMessage._id} item={selectedSupportMessage} onMarkRead={() => openSupportMessage(selectedSupportMessage)} onReply={(updated) => setNotifications((items) => items.map((notification) => notification._id === updated._id ? updated : notification))} /> : <div className="support-detail-placeholder"><span>↖</span><strong>Select a message</strong><p>Choose a customer question to read its full details.</p></div>}
                 </div>
               </div>
             </div>
@@ -511,12 +511,42 @@ function formatNotificationTime(value) {
   return Number.isNaN(date.getTime()) ? 'Recently' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-function SupportMessageDetail({ item }) {
+function SupportMessageDetail({ item, onReply }) {
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
   const content = getCustomerSupportContent(item.message)
+  const sendReply = async (event) => {
+    event.preventDefault()
+    const text = reply.trim()
+    if (!text || sending) return
+    setSending(true)
+    setError('')
+    try {
+      const updated = await api(`/api/support/messages/${item._id}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      })
+      onReply(updated)
+      setReply('')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
   return <article className="support-detail-card">
     <div className="support-detail-topline"><span className="support-detail-tag"><i /> Customer question</span><time>{formatNotificationTime(item.createdAt)}</time></div>
     <div className="support-detail-person"><span className="support-customer-avatar large">{(item.sender || 'C').slice(0, 1).toUpperCase()}</span><div><p className="admin-kicker">Sent from chapel help chat</p><h3>{item.sender || content.account || 'Chapel customer'}</h3><small>{content.chapel || 'Chapel not specified'}</small></div><span className={`support-read-state ${item.read ? 'read' : ''}`}>{item.read ? 'Reviewed' : 'Unread'}</span></div>
     <div className="support-question-body"><p className="admin-kicker">Customer message</p><p>{content.question || 'No message content provided.'}</p></div>
+    {item.replies?.map((message, index) => <div className="support-reply-body" key={message._id || `${item._id}-reply-${index}`}><div><strong>{message.sender || 'CosmoCare support'}</strong><time>{formatNotificationTime(message.createdAt)}</time></div><p>{message.text}</p></div>)}
+    <form className="support-reply-form" onSubmit={sendReply}>
+      <label htmlFor={`support-reply-${item._id}`}>Reply to customer</label>
+      <textarea id={`support-reply-${item._id}`} value={reply} onChange={(event) => setReply(event.target.value)} maxLength={2000} placeholder="Write a reply that will appear in the chapel help chat..." required />
+      {error && <p className="account-form-error" role="alert">{error}</p>}
+      <button type="submit" disabled={sending || !reply.trim()}>{sending ? 'Sending reply...' : 'Send reply'}</button>
+    </form>
     <div className="support-detail-footer"><span>Customer support question</span><span>{item.read ? 'Opened by admin' : 'Select this message in the list to mark it reviewed'}</span></div>
   </article>
 }

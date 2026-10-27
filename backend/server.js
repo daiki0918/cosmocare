@@ -61,9 +61,14 @@ const notificationSchema = new mongoose.Schema(
     recipient: { type: String, enum: ["admin", "staff"], required: true },
     branch: { type: String, default: null },
     chapelName: { type: String, default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     sender: { type: String, required: true },
     title: { type: String, required: true },
     message: { type: String, required: true },
+    replies: {
+      type: [{ sender: String, text: String, createdAt: { type: Date, default: Date.now } }],
+      default: [],
+    },
     read: { type: Boolean, default: false },
   },
   { timestamps: true },
@@ -478,18 +483,55 @@ app.get("/api/notifications", authenticate, async (req, res, next) => {
   }
 });
 
+app.get("/api/support/messages", authenticate, async (req, res, next) => {
+  try {
+    if (req.user.type !== "Chapel") {
+      return res.status(403).json({ message: "Only chapel accounts can view their support conversations." });
+    }
+    const messages = await Notification.find({
+      recipient: "admin",
+      title: "Customer support question",
+      createdBy: req.user._id,
+    }).sort({ createdAt: 1 });
+    res.json(messages);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/support/messages/:id/replies", authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const text = String(req.body.text || "").trim();
+    if (!text) return res.status(400).json({ message: "A reply is required." });
+    if (text.length > 2000) return res.status(400).json({ message: "Replies must be 2,000 characters or fewer." });
+
+    const message = await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipient: "admin", title: "Customer support question" },
+      { $push: { replies: { sender: req.user.name, text } } },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!message) return res.status(404).json({ message: "Customer support message not found." });
+    broadcastRequestEvent("support-replied", message);
+    res.json(message);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/notifications", authenticate, async (req, res, next) => {
   try {
     const recipient = req.user.type === "Admin" ? "staff" : "admin";
     const { title, message, branch = null, chapelName = null } = req.body;
     if (!title || !message) return res.status(400).json({ message: "Title and message are required." });
+    const isChapelSupport = recipient === "admin" && req.user.type === "Chapel";
     const notification = await Notification.create({
       recipient,
       sender: req.user.name,
       title,
       message,
-      branch: recipient === "staff" ? branch : null,
-      chapelName: recipient === "staff" ? chapelName : null,
+      branch: recipient === "staff" ? branch : isChapelSupport ? req.user.branch || req.user.chapel : null,
+      chapelName: recipient === "staff" ? chapelName : isChapelSupport ? req.user.chapelName : null,
+      createdBy: isChapelSupport ? req.user._id : null,
     });
     broadcastRequestEvent("notification-created", notification);
     res.status(201).json(notification);
