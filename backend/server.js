@@ -409,6 +409,13 @@ app.post("/api/requests", authenticate, async (req, res, next) => {
     if (!request || !requestedBy || !location) {
       return res.status(400).json({ message: "Request, requester, and location are required." });
     }
+    const requestDetails = String(details || "").trim();
+    if (String(request).trim().toLowerCase() === "other request" && !requestDetails) {
+      return res.status(400).json({ message: "Please describe what kind of request you need." });
+    }
+    if (requestDetails.length > 500) {
+      return res.status(400).json({ message: "Request details must be 500 characters or fewer." });
+    }
     const created = await ServiceRequest.create({
       request,
       icon: resolveServiceIcon(request, icon),
@@ -417,7 +424,7 @@ app.post("/api/requests", authenticate, async (req, res, next) => {
       branch: req.user.branch || req.user.chapel,
       chapelName: req.user.chapelName || req.user.name,
       location,
-      details,
+      details: requestDetails,
       createdBy: req.user._id,
     });
     const populated = await created.populate("createdBy", "name email chapel");
@@ -427,7 +434,7 @@ app.post("/api/requests", authenticate, async (req, res, next) => {
       chapelName: req.user.chapelName || req.user.name,
       sender: req.user.name,
       title: "New customer request",
-      message: `${request} requested by ${requestedBy} at ${location}.`,
+      message: `${request} requested by ${requestedBy} at ${location}.${requestDetails ? ` Details: ${requestDetails}` : ""}`,
     });
     broadcastRequestEvent("request-created", populated);
     broadcastRequestEvent("notification-created", notification);

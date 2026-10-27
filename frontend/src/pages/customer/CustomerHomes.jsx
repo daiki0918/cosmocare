@@ -126,6 +126,8 @@ function CustomerHomes() {
   const [servicesLoading, setServicesLoading] = useState(true)
   const [sent, setSent] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState(null)
+  const [otherRequestOption, setOtherRequestOption] = useState(null)
+  const [otherRequestDetails, setOtherRequestDetails] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [activeRequest, setActiveRequest] = useState('')
   const [error, setError] = useState('')
@@ -178,8 +180,13 @@ function CustomerHomes() {
     0,
     Number(localStorage.getItem(getRequestCooldownKey(currentCustomer, request)) || 0) - cooldownNow,
   )
-  const sendRequest = async (option) => {
+  const sendRequest = async (option, details = '') => {
     if (!selectedCategory || submitLock.current) return
+    const requestDetails = details.trim()
+    if (option.label.trim().toLowerCase() === 'other request' && !requestDetails) {
+      setError('Please describe what kind of request you need.')
+      return
+    }
     const location = currentCustomer?.chapel || currentCustomer?.branch || localStorage.getItem('chapel-session')
     if (!currentCustomer?.name || !location) {
       setError('Your chapel account details are missing. Please sign out and sign in again.')
@@ -208,6 +215,7 @@ function CustomerHomes() {
           icon: option.icon,
           requestedBy: currentCustomer.name,
           location,
+          details: requestDetails,
         }),
       })
       const successfulCooldownUntil = getCurrentTimestamp() + REQUEST_COOLDOWN_MS
@@ -215,6 +223,8 @@ function CustomerHomes() {
       setCooldownNow(getCurrentTimestamp())
       setSent({ label: option.label })
       setSelectedCategory(null)
+      setOtherRequestOption(null)
+      setOtherRequestDetails('')
       setShowRequests(false)
     } catch (requestError) {
       if (localStorage.getItem(cooldownKey) === String(cooldownUntil)) localStorage.removeItem(cooldownKey)
@@ -224,6 +234,15 @@ function CustomerHomes() {
       setSubmitting(false)
       setActiveRequest('')
     }
+  }
+  const chooseRequest = (option) => {
+    if (option.label.trim().toLowerCase() === 'other request') {
+      setError('')
+      setOtherRequestDetails('')
+      setOtherRequestOption(option)
+      return
+    }
+    void sendRequest(option)
   }
   const loadRequests = async () => {
     setRequestsLoading(true)
@@ -291,7 +310,7 @@ function CustomerHomes() {
             </div>
             <div className="customer-option-list">
               {requestOptions.map((option) => (
-                <button className="customer-option-button" type="button" key={option.label} onClick={() => sendRequest(option)} disabled={submitting || getCooldownRemaining(option.label) > 0}>
+                <button className="customer-option-button" type="button" key={option.label} onClick={() => chooseRequest(option)} disabled={submitting || getCooldownRemaining(option.label) > 0}>
                   <span className="customer-option-icon"><Icon name={option.icon} /></span>
                   <span className="customer-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
                   {submitting && activeRequest === option.label
@@ -316,7 +335,7 @@ function CustomerHomes() {
               <ul className="customer-request-list">
                 {requests.map((request) => (
                   <li key={request._id}>
-                    <div><strong>{request.request}</strong><small>Submitted {new Date(request.createdAt).toLocaleString()}</small></div>
+                    <div><strong>{request.request}</strong>{request.details && <small>{request.details}</small>}<small>Submitted {new Date(request.createdAt).toLocaleString()}</small></div>
                     <span className={`customer-request-status ${request.status === 'Completed' ? 'complete' : request.status === 'In progress' ? 'progress' : ''}`}>{request.status}</span>
                   </li>
                 ))}
@@ -354,6 +373,37 @@ function CustomerHomes() {
         )}
         </div>
       </main>
+      {otherRequestOption && (
+        <div className="notification-overlay" role="presentation" onClick={() => !submitting && setOtherRequestOption(null)}>
+          <section className="notification-modal suggestion-modal other-request-modal" role="dialog" aria-modal="true" aria-labelledby="other-request-title" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" type="button" aria-label="Close other request form" onClick={() => setOtherRequestOption(null)} disabled={submitting}>×</button>
+            <p className="admin-kicker">Other request</p>
+            <h2 id="other-request-title">What do you need?</h2>
+            <p className="modal-description">Tell our team what kind of request you have so they can be prepared to help.</p>
+            {error && <p className="customer-login-error" role="alert">{error}</p>}
+            <form onSubmit={(event) => { event.preventDefault(); void sendRequest(otherRequestOption, otherRequestDetails) }}>
+              <label className="suggestion-label" htmlFor="other-request-details">Request details</label>
+              <textarea
+                className="suggestion-input suggestion-textarea"
+                id="other-request-details"
+                value={otherRequestDetails}
+                onChange={(event) => setOtherRequestDetails(event.target.value)}
+                placeholder="Describe what you need..."
+                maxLength={500}
+                required
+                autoFocus
+              />
+              <div className="other-request-character-count">{otherRequestDetails.length}/500</div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setOtherRequestOption(null)} disabled={submitting}>Cancel</button>
+                <button className="save-services-button" type="submit" disabled={submitting || !otherRequestDetails.trim()}>
+                  {submitting ? 'Sending...' : 'Send request'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {sent && <div className="notification-overlay" role="presentation" onClick={() => setSent(null)}>
         <section className="notification-modal account-action-modal" role="dialog" aria-modal="true" aria-labelledby="request-success-title" onClick={(event) => event.stopPropagation()}>
           <div className="account-action-icon account-action-icon-success">✓</div>

@@ -209,6 +209,7 @@ function StaffRequestRow({ item, onUpdate }) {
             <small className="request-meta-item"><b>Chapel account</b><span>{item.createdBy?.name || 'Not provided'}{item.createdBy?.email ? ` · ${item.createdBy.email}` : ''}</span></small>
             <small className="request-meta-item"><b>Chapel</b><span>{item.chapelName || item.chapel || item.createdBy?.chapel || 'Not provided'}</span></small>
             <small className="request-meta-item"><b>Branch</b><span>{item.branch || item.createdBy?.branch || 'Not provided'}</span></small>
+            {item.details && <small className="request-meta-item request-meta-details"><b>Request details</b><span>{item.details}</span></small>}
           </span>
         </span>
       </span>
