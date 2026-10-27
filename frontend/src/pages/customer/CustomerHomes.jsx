@@ -367,7 +367,6 @@ function CustomerHomes() {
       </div>}
       <CustomerHelpChat
         services={services}
-        currentCustomer={currentCustomer}
         onViewRequests={loadRequests}
         onChooseService={chooseChatService}
       />

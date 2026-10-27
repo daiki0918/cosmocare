@@ -820,10 +820,20 @@ button { cursor: pointer; }
 .customer-chat-compose > button { width: 42px; height: 42px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #fff; background: #0872ba; font-size: 18px; }
 .customer-chat-compose > button:disabled { cursor: not-allowed; background: #aab8c2; }
 
-@media (min-width: 601px) and (max-width: 900px) {
-  .customer-chat-window { width: min(460px, calc(100vw - 32px)); height: min(680px, calc(100dvh - 100px)); max-height: none; }
+@media (min-width: 601px) and (max-width: 1100px) {
+  .customer-chat-widget.open { inset: 0; align-items: stretch; justify-content: flex-end; background: rgba(15, 35, 51, .22); }
+  .customer-chat-widget.open .customer-chat-launcher { display: none; }
+  .customer-chat-window { width: min(720px, 100%); height: 100%; max-height: none; margin-left: auto; border-radius: 0; }
   .customer-chat-messages { min-height: 0; flex: 1; }
-  .customer-chat-faqs { max-height: 150px; overflow-y: auto; }
+  .customer-chat-faqs { max-height: 180px; overflow-y: auto; }
+}
+
+@media (pointer: coarse) and (hover: none) and (min-width: 1101px) {
+  .customer-chat-widget.open { inset: 0; align-items: stretch; justify-content: flex-end; background: rgba(15, 35, 51, .22); }
+  .customer-chat-widget.open .customer-chat-launcher { display: none; }
+  .customer-chat-window { width: min(720px, 100%); height: 100%; max-height: none; margin-left: auto; border-radius: 0; }
+  .customer-chat-messages { min-height: 0; flex: 1; }
+  .customer-chat-faqs { max-height: 180px; overflow-y: auto; }
 }
 
 @media (max-width: 600px) {

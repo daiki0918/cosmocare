@@ -53,7 +53,7 @@ function getFaqReply(text, services) {
   }
 }
 
-function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseService }) {
+function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([
     { id: 'welcome', sender: 'bot', text: 'Hello! I can help you find services, check request status, or contact our support team. What would you like to know?' },
@@ -61,11 +61,10 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
   const [question, setQuestion] = useState('')
   const [supportMessage, setSupportMessage] = useState('')
   const [supportPrompt, setSupportPrompt] = useState(false)
+  const [supportThreadId, setSupportThreadId] = useState(null)
   const [sendingSupport, setSendingSupport] = useState(false)
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
-  const supportHistoryLoaded = useRef(false)
-  const loadedSupportReplyIds = useRef(new Set())
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -83,28 +82,31 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
         const conversations = await api('/api/support/messages')
         if (!active) return
 
+        const latestConversation = conversations.reduce((latest, conversation) => (
+          !latest || new Date(conversation.updatedAt) > new Date(latest.updatedAt)
+            ? conversation
+            : latest
+        ), null)
+        if (latestConversation) setSupportThreadId(latestConversation._id)
         const history = conversations.flatMap((conversation) => {
-          const question = String(conversation.message || '').replace(/\n\nChapel:[\s\S]*$/, '').trim()
-          const customerMessage = question
-            ? [{ id: `${conversation._id}-question`, sender: 'user', text: question }]
+          const firstMessage = String(conversation.message || '').replace(/\n\nChapel:[\s\S]*$/, '').trim()
+          const customerMessage = firstMessage
+            ? [{ id: `${conversation._id}-question`, sender: 'user', text: firstMessage }]
             : []
-          const replies = (conversation.replies || []).flatMap((reply, index) => {
-            const id = reply._id || `${conversation._id}-reply-${index}`
-            if (loadedSupportReplyIds.current.has(id)) return []
-            loadedSupportReplyIds.current.add(id)
-            return [{ id, sender: 'admin', text: reply.text }]
-          })
+          const replies = (conversation.replies || []).map((reply, index) => ({
+            id: reply._id || `${conversation._id}-reply-${index}`,
+            sender: reply.senderType === 'Chapel' ? 'user' : 'admin',
+            text: reply.text,
+          }))
           return [...customerMessage, ...replies]
         })
 
-        if (!supportHistoryLoaded.current) {
-          supportHistoryLoaded.current = true
-          if (history.length) {
-            setMessages((items) => items.length === 1 && items[0].id === 'welcome' ? history : [...items, ...history.filter((message) => message.sender === 'admin')])
-          }
-        } else {
-          const newReplies = history.filter((message) => message.sender === 'admin')
-          if (newReplies.length) setMessages((items) => [...items, ...newReplies])
+        if (history.length) {
+          setMessages((items) => {
+            const existing = new Map(items.filter((item) => item.id !== 'welcome').map((item) => [item.id, item]))
+            history.forEach((item) => existing.set(item.id, item))
+            return Array.from(existing.values())
+          })
         }
         setError('')
       } catch (requestError) {
@@ -124,7 +126,7 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
 
   const addBotMessage = (reply) => {
     setMessages((items) => [...items, { id: `${Date.now()}-${items.length}`, sender: 'bot', ...reply }])
-    setSupportPrompt(reply.actionType === 'support')
+    setSupportPrompt(reply.actionType === 'support' && !supportThreadId)
   }
 
   const askQuestion = (text) => {
@@ -138,39 +140,84 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
     if (reply.actionType === 'support') setSupportMessage(trimmed)
   }
 
-  const sendToSupport = async (event) => {
-    event.preventDefault()
-    const message = supportMessage.trim()
-    if (!message || sendingSupport) return
+  const sendSupportMessage = async (message) => {
+    const text = message.trim()
+    if (!text || sendingSupport) return false
     setSendingSupport(true)
     setError('')
     try {
-      await api('/api/notifications', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: 'Customer support question',
-          message: `${message}\n\nChapel: ${currentCustomer?.chapel || currentCustomer?.branch || 'Not provided'}\nAccount: ${currentCustomer?.name || 'Not provided'}`,
-        }),
-      })
+      const conversation = supportThreadId
+        ? await api(`/api/support/messages/${supportThreadId}/replies`, {
+          method: 'POST',
+          body: JSON.stringify({ text }),
+        })
+        : await api('/api/support/messages', {
+          method: 'POST',
+          body: JSON.stringify({ text }),
+        })
+      setSupportThreadId(conversation._id)
+      const lastReply = conversation.replies?.[conversation.replies.length - 1]
+      const newMessages = lastReply
+        ? [{
+          id: lastReply._id,
+          sender: lastReply.senderType === 'Admin' ? 'admin' : 'user',
+          text: lastReply.text,
+        }]
+        : [{
+          id: `${conversation._id}-question`,
+          sender: 'user',
+          text,
+        }]
       setMessages((items) => {
-        const hasQuestion = items.some((item) => item.sender === 'user' && item.text === message)
-        return [
-          ...items,
-          ...(!hasQuestion ? [{ id: `${Date.now()}-user`, sender: 'user', text: message }] : []),
-          {
-            id: `${Date.now()}-sent`,
-            sender: 'bot',
-            text: 'Your message was sent to the CosmoCare support team. An administrator can reply here.',
-          },
-        ]
+        const next = [...items]
+        for (const newMessage of newMessages) {
+          const duplicate = next.findIndex((item) => item.sender === newMessage.sender && item.text === newMessage.text)
+          if (duplicate >= 0) {
+            next[duplicate] = newMessage
+            for (let index = next.length - 1; index >= 0; index -= 1) {
+              if (index !== duplicate && next[index].sender === newMessage.sender && next[index].text === newMessage.text) {
+                next.splice(index, 1)
+              }
+            }
+          } else {
+            next.push(newMessage)
+          }
+        }
+        return next
       })
       setSupportMessage('')
       setSupportPrompt(false)
+      return true
     } catch (requestError) {
       setError(requestError.message)
+      return false
     } finally {
       setSendingSupport(false)
     }
+  }
+
+  const sendToSupport = async (event) => {
+    event.preventDefault()
+    const text = supportMessage.trim()
+    if (!text || sendingSupport) return
+    const sent = await sendSupportMessage(text)
+    if (sent && !supportThreadId) {
+      setMessages((items) => [...items, {
+        id: `${Date.now()}-sent`,
+        sender: 'bot',
+        text: 'Your message was sent to the CosmoCare support team. You can continue replying here.',
+      }])
+    }
+  }
+
+  const submitQuestion = (event) => {
+    event.preventDefault()
+    if (supportThreadId) {
+      const text = question.trim()
+      if (text) void sendSupportMessage(text).then((sent) => sent && setQuestion(''))
+      return
+    }
+    askQuestion(question)
   }
 
   const runAction = (message) => {
@@ -187,7 +234,15 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
         onChooseService(service)
       }
     } else if (message.actionType === 'support') {
-      setSupportPrompt(true)
+      if (supportThreadId) {
+        setMessages((items) => [...items, {
+          id: `${Date.now()}-support-info`,
+          sender: 'bot',
+          text: 'Your support conversation is open. Reply using the message box below and the CosmoCare team will see it.',
+        }])
+      } else {
+        setSupportPrompt(true)
+      }
     }
   }
 
@@ -220,7 +275,7 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
             {supportPrompt && (
               <form className="customer-chat-support" onSubmit={sendToSupport}>
                 <label htmlFor="customer-support-message">Message the support team</label>
-                <textarea id="customer-support-message" rows="3" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Type your question here…" required />
+                <textarea id="customer-support-message" rows="3" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Type your question here…" maxLength={2000} required />
                 {error && <p className="customer-login-error" role="alert">{error}</p>}
                 <button type="submit" disabled={sendingSupport || !supportMessage.trim()}>{sendingSupport ? 'Sending…' : 'Send to support'}</button>
               </form>
@@ -237,9 +292,9 @@ function CustomerHelpChat({ services, currentCustomer, onViewRequests, onChooseS
               <button type="button" onClick={() => askQuestion('Can I change or cancel a request?')}>Change a request</button>
             </div>
           </div>
-          <form className="customer-chat-compose" onSubmit={(event) => { event.preventDefault(); askQuestion(question) }}>
-            <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a question…" aria-label="Ask CosmoCare a question" />
-            <button type="submit" aria-label="Send question" disabled={!question.trim()}>➤</button>
+          <form className="customer-chat-compose" onSubmit={submitQuestion}>
+            <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={supportThreadId ? 'Reply to CosmoCare support…' : 'Ask a question…'} aria-label={supportThreadId ? 'Reply to CosmoCare support' : 'Ask CosmoCare a question'} maxLength={2000} />
+            <button type="submit" aria-label={supportThreadId ? 'Send reply' : 'Send question'} disabled={!question.trim() || sendingSupport}>➤</button>
           </form>
         </section>
       )}

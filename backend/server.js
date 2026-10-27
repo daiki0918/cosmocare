@@ -66,7 +66,12 @@ const notificationSchema = new mongoose.Schema(
     title: { type: String, required: true },
     message: { type: String, required: true },
     replies: {
-      type: [{ sender: String, text: String, createdAt: { type: Date, default: Date.now } }],
+      type: [{
+        sender: String,
+        senderType: { type: String, enum: ["Admin", "Chapel"], default: "Admin" },
+        text: String,
+        createdAt: { type: Date, default: Date.now },
+      }],
       default: [],
     },
     read: { type: Boolean, default: false },
@@ -499,19 +504,69 @@ app.get("/api/support/messages", authenticate, async (req, res, next) => {
   }
 });
 
-app.post("/api/support/messages/:id/replies", authenticate, requireAdmin, async (req, res, next) => {
+app.post("/api/support/messages", authenticate, async (req, res, next) => {
   try {
+    if (req.user.type !== "Chapel") {
+      return res.status(403).json({ message: "Only chapel accounts can message customer support." });
+    }
+    const text = String(req.body.text || "").trim();
+    if (!text) return res.status(400).json({ message: "A message is required." });
+    if (text.length > 2000) return res.status(400).json({ message: "Messages must be 2,000 characters or fewer." });
+
+    let message = await Notification.findOne({
+      recipient: "admin",
+      title: "Customer support question",
+      createdBy: req.user._id,
+    }).sort({ updatedAt: -1 });
+
+    if (!message) {
+      message = await Notification.create({
+        recipient: "admin",
+        branch: req.user.branch || req.user.chapel,
+        chapelName: req.user.chapelName,
+        createdBy: req.user._id,
+        sender: req.user.name,
+        title: "Customer support question",
+        message: `${text}\n\nChapel: ${req.user.chapel || req.user.branch || "Not provided"}\nAccount: ${req.user.name || "Not provided"}`,
+        read: false,
+      });
+    } else {
+      message.replies.push({ sender: req.user.name, senderType: "Chapel", text });
+      message.read = false;
+      await message.save();
+    }
+    broadcastRequestEvent("notification-created", message);
+    res.json(message);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/support/messages/:id/replies", authenticate, async (req, res, next) => {
+  try {
+    if (req.user.type !== "Admin" && req.user.type !== "Chapel") {
+      return res.status(403).json({ message: "Only administrators and chapel accounts can reply to support messages." });
+    }
     const text = String(req.body.text || "").trim();
     if (!text) return res.status(400).json({ message: "A reply is required." });
     if (text.length > 2000) return res.status(400).json({ message: "Replies must be 2,000 characters or fewer." });
 
+    const filter = {
+      _id: req.params.id,
+      recipient: "admin",
+      title: "Customer support question",
+      ...(req.user.type === "Chapel" ? { createdBy: req.user._id } : {}),
+    };
     const message = await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: "admin", title: "Customer support question" },
-      { $push: { replies: { sender: req.user.name, text } } },
+      filter,
+      {
+        $push: { replies: { sender: req.user.name, senderType: req.user.type, text } },
+        ...(req.user.type === "Chapel" ? { $set: { read: false } } : {}),
+      },
       { returnDocument: "after", runValidators: true },
     );
     if (!message) return res.status(404).json({ message: "Customer support message not found." });
-    broadcastRequestEvent("support-replied", message);
+    broadcastRequestEvent(req.user.type === "Admin" ? "support-replied" : "notification-created", message);
     res.json(message);
   } catch (error) {
     next(error);
