@@ -149,6 +149,7 @@
 @keyframes ch-fade-out    { to   { opacity: 0; } }
 @keyframes ch-sheet-in    { from { opacity: 0; transform: translateY(var(--ch-sheet-shift)); } }
 @keyframes ch-sheet-out   { to   { opacity: 0; transform: translateY(var(--ch-sheet-shift)); } }
+@keyframes ch-drawer-in   { from { transform: translateX(100%); } }
 @keyframes ch-dialog-in   { from { opacity: 0; transform: translateY(0.5rem) scale(var(--ch-scale-from)); } }
 @keyframes ch-dialog-out  { to   { opacity: 0; transform: translateY(0.25rem) scale(var(--ch-scale-from)); } }
 @keyframes ch-spin        { to   { transform: rotate(360deg); } }
@@ -222,23 +223,141 @@
   margin: 0;
 }
 
-.customer-home .customer-header .logout-button {
-  min-width: 4rem;
+.customer-home .customer-account-toggle {
+  width: 2.75rem;
   min-height: 2.75rem;
-  padding: 0.55rem 0.9rem;
+  padding: 0.65rem;
   border: 1px solid var(--chapel-stone);
-  border-radius: var(--ch-radius-sm);
-  color: var(--chapel-ink);
+  border-radius: 50%;
+  color: var(--chapel-blue);
   background: var(--chapel-white);
   font-size: 0.875rem;
   font-weight: 600;
   transition: border-color var(--ch-dur-base) var(--ch-ease-out),
-    color var(--ch-dur-base) var(--ch-ease-out),
+    background-color var(--ch-dur-base) var(--ch-ease-out),
     transform var(--ch-dur-fast) var(--ch-ease-out);
 }
 
-.customer-home .customer-header .logout-button:active {
+.customer-home .customer-account-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.customer-home .customer-account-toggle:active {
   transform: scale(0.97);
+}
+
+.customer-home .customer-account-overlay {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(37 49 45 / 42%);
+  animation: ch-fade-in var(--ch-dur-base) var(--ch-ease-out) backwards;
+}
+
+.customer-home .customer-account-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.customer-home .customer-account-drawer {
+  position: relative;
+  z-index: 1;
+  width: min(24rem, calc(100vw - 1rem));
+  height: 100%;
+  min-height: 100dvh;
+  padding: max(1.25rem, env(safe-area-inset-top))
+    max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom))
+    max(1.25rem, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--chapel-stone);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  box-shadow: -0.75rem 0 2.5rem rgb(27 37 33 / 16%);
+  animation: ch-drawer-in var(--ch-dur-slow) var(--ch-ease-out) backwards;
+}
+
+.customer-home .customer-account-drawer-header {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.customer-home .customer-account-drawer-header h2 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.customer-home .customer-account-close {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0.75rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--chapel-stone);
+  border-radius: 50%;
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+}
+
+.customer-home .customer-account-close svg,
+.customer-home .customer-account-logout svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.customer-home .customer-account-details {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-md);
+  background: #f7f6f1;
+}
+
+.customer-home .customer-account-details strong,
+.customer-home .customer-account-details span {
+  overflow-wrap: anywhere;
+}
+
+.customer-home .customer-account-details strong {
+  font-size: 1rem;
+}
+
+.customer-home .customer-account-details span {
+  color: var(--chapel-muted);
+  font-size: 0.875rem;
+}
+
+.customer-home .customer-account-logout {
+  width: 100%;
+  min-height: 3rem;
+  margin-top: 1rem;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid #d7aaa2;
+  border-radius: var(--ch-radius-sm);
+  color: #702d26;
+  background: #fffefa;
+  text-align: left;
+  font-size: 0.9375rem;
+  font-weight: 650;
 }
 
 /* ---------- 5. Layout ---------------------------------------------------- */
@@ -537,9 +656,14 @@
 
 /* Hover only where a real pointer exists – never “stuck” on touch screens */
 @media (hover: hover) {
-  .customer-home .customer-header .logout-button:hover {
+  .customer-home .customer-account-toggle:hover,
+  .customer-home .customer-account-close:hover {
     border-color: var(--chapel-blue);
-    color: var(--chapel-blue);
+    background: #f1f5f0;
+  }
+
+  .customer-home .customer-account-logout:hover {
+    background: #f9eeeb;
   }
 
   .customer-home .customer-service-card:hover:not(:disabled) {
@@ -984,6 +1108,48 @@
 .customer-home .account-action-icon-success { color: #315a3d; background: #edf4ed; }
 .customer-home .account-action-icon-danger  { color: #702d26; background: #f9eeeb; }
 
+.customer-home .request-confirm-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.9rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--chapel-sage-line);
+  border-radius: 50%;
+  color: var(--chapel-blue);
+  background: var(--chapel-sage);
+}
+
+.customer-home .request-confirm-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.customer-home .request-confirm-summary {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-sm);
+  background: var(--chapel-ivory);
+}
+
+.customer-home .request-confirm-summary > span {
+  color: var(--chapel-muted);
+  font-size: 0.8125rem;
+}
+
+.customer-home .request-confirm-summary > strong {
+  overflow-wrap: anywhere;
+}
+
+.customer-home .request-confirm-summary > p {
+  margin: 0 0 0.45rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 /* Success tick draws itself once */
 .customer-home .ch-draw {
   stroke-dasharray: 1;
@@ -1108,22 +1274,18 @@
 
 /* ---------- 13. Help chat (your existing rules, unchanged) -------------- */
 .customer-home .customer-chat-widget {
-  position: relative;
-  right: auto;
-  bottom: auto;
-  width: min(100%, 70rem);
-  margin: 0.5rem auto 0;
-  padding-inline: 0.15rem;
-  gap: 0.75rem;
-}
-
-.customer-home .customer-chat-widget.open {
   position: fixed;
+  z-index: 45;
   right: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
   width: auto;
   margin: 0;
   padding: 0;
+  gap: 0.75rem;
+}
+
+.customer-home .customer-chat-widget.open {
+  z-index: 60;
 }
 
 .customer-home .customer-chat-launcher {
@@ -1297,13 +1459,6 @@
     font-size: 1.75rem;
   }
 
-  .customer-home .customer-chat-widget {
-    position: relative;
-    inset: auto;
-    width: min(100%, 70rem);
-    margin: 0.25rem auto 0;
-  }
-
   .customer-home .customer-chat-widget.open {
     position: fixed;
     inset: auto max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) auto;
@@ -1317,14 +1472,52 @@
 }
 
 @media (max-width: 30rem) {
-  .customer-home .customer-chat-widget.open {
+  .customer-home .customer-footer {
+    padding-right: calc(4.5rem + env(safe-area-inset-right));
+  }
+
+  .customer-home .customer-welcome {
+    min-height: 0;
+    padding-bottom: 3.25rem;
+  }
+
+  .customer-home .customer-heart {
+    right: 0.75rem;
+    bottom: 0.65rem;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .customer-home .customer-chat-widget {
     right: max(0.75rem, env(safe-area-inset-right));
     bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
+  .customer-home .customer-chat-widget.open {
+    inset: 0;
+    width: auto;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    align-items: stretch;
+    justify-content: stretch;
+    background: rgb(37 49 45 / 42%);
+  }
+
+  .customer-home .customer-chat-widget.open .customer-chat-launcher {
+    display: none;
+  }
+
   .customer-home .customer-chat-window {
-    width: min(25.625rem, calc(100vw - 1.5rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
-    max-height: min(42rem, calc(100dvh - 5.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+    width: min(100%, 30rem);
+    height: 100%;
+    max-height: none;
+    margin-left: auto;
+    border-radius: 0;
+  }
+
+  .customer-home .customer-chat-messages {
+    min-height: 0;
+    flex: 1;
   }
 }
 
@@ -1353,6 +1546,10 @@
   }
 
   .customer-home .ch-draw {
+    animation: none;
+  }
+
+  .customer-home .customer-account-drawer {
     animation: none;
   }
 

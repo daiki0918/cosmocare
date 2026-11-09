@@ -175,6 +175,7 @@ function ModalShell({
   className = '',
   skipOverlayFade = false,
   hideBackdrop = false,
+  inert = false,
   children,
 }) {
   const dialogRef = useRef(null)
@@ -189,7 +190,10 @@ function ModalShell({
       ;(first || dialog).focus({ preventScroll: true })
     }
     return () => {
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true })
+      if (opener instanceof HTMLElement && opener.isConnected) {
+        const nextDialog = document.querySelector('.customer-home [role="dialog"]')
+        if (!nextDialog || nextDialog.contains(opener)) opener.focus({ preventScroll: true })
+      }
     }
   }, [opener])
 
@@ -216,7 +220,7 @@ function ModalShell({
   const overlayClass = [
     'notification-overlay',
     closing ? 'is-closing' : '',
-    closing && hideBackdrop ? 'is-handoff-out' : '',
+    hideBackdrop ? 'is-handoff-out' : '',
     skipFade ? 'is-handoff-in' : '',
   ].filter(Boolean).join(' ')
 
@@ -224,6 +228,7 @@ function ModalShell({
     <div
       className={overlayClass}
       role="presentation"
+      inert={inert}
       onPointerDown={(event) => { pressStartedOnOverlay.current = event.target === event.currentTarget }}
       onClick={(event) => {
         if (event.target === event.currentTarget && pressStartedOnOverlay.current) onDismiss()
@@ -253,6 +258,7 @@ function CustomerHomes() {
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [otherRequestOption, setOtherRequestOption] = useState(null)
   const [otherRequestDetails, setOtherRequestDetails] = useState('')
+  const [pendingRequest, setPendingRequest] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [activeRequest, setActiveRequest] = useState('')
   const [error, setError] = useState('')
@@ -261,13 +267,17 @@ function CustomerHomes() {
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [requestsError, setRequestsError] = useState('')
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [cooldownNow, setCooldownNow] = useState(() => Date.now())
   const [navDirection, setNavDirection] = useState('forward')
   const [revealPlayed, setRevealPlayed] = useState(false)
   const submitLock = useRef(false)
+  const accountMenuRef = useRef(null)
+  const accountTriggerRef = useRef(null)
 
   const logoutPresence = usePresence(logoutConfirmOpen || null, MODAL_EXIT_MS)
   const otherPresence = usePresence(otherRequestOption, MODAL_EXIT_MS)
+  const pendingPresence = usePresence(pendingRequest, MODAL_EXIT_MS)
   const sentPresence = usePresence(sent, MODAL_EXIT_MS)
 
   useEffect(() => {
@@ -276,6 +286,33 @@ function CustomerHomes() {
       .catch((requestError) => setError(requestError.message))
       .finally(() => setServicesLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined
+
+    const trigger = accountTriggerRef.current
+    const { overflow, paddingRight } = document.body.style
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+    document.body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`
+
+    const firstItem = accountMenuRef.current?.querySelector(FOCUSABLE)
+    firstItem?.focus({ preventScroll: true })
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.body.style.overflow = overflow
+      document.body.style.paddingRight = paddingRight
+      window.removeEventListener('keydown', onKeyDown)
+      if (trigger?.isConnected) {
+        trigger.focus({ preventScroll: true })
+      }
+    }
+  }, [accountMenuOpen])
 
   const categoryServices = selectedCategory
     ? services.filter((service) => getServiceCategory(service) === selectedCategory.id)
@@ -301,7 +338,7 @@ function CustomerHomes() {
 
   // While any dialog is open: lock background scroll without shifting the layout,
   // and let Escape close the top-most dialog.
-  const modalOpen = logoutConfirmOpen || Boolean(otherRequestOption) || Boolean(sent)
+  const modalOpen = logoutConfirmOpen || Boolean(otherRequestOption) || Boolean(pendingRequest) || Boolean(sent)
   useEffect(() => {
     if (!modalOpen) return undefined
     const { overflow, paddingRight } = document.body.style
@@ -310,7 +347,8 @@ function CustomerHomes() {
     if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`
     const onKeyDown = (event) => {
       if (event.key !== 'Escape' || submitLock.current) return
-      if (otherRequestOption) setOtherRequestOption(null)
+      if (pendingRequest) setPendingRequest(null)
+      else if (otherRequestOption) setOtherRequestOption(null)
       else if (logoutConfirmOpen) setLogoutConfirmOpen(false)
       else setSent(null)
     }
@@ -320,7 +358,7 @@ function CustomerHomes() {
       document.body.style.paddingRight = paddingRight
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [modalOpen, otherRequestOption, logoutConfirmOpen])
+  }, [modalOpen, otherRequestOption, pendingRequest, logoutConfirmOpen])
 
   // When the screen changes: scroll to top and move focus to the new heading
   // (keyboard and screen-reader users otherwise lose their place).
@@ -409,6 +447,7 @@ function CustomerHomes() {
       setCooldownNow(getCurrentTimestamp())
       setNavDirection('back')
       setSent({ label: option.label })
+      setPendingRequest(null)
       setSelectedCategory(null)
       setOtherRequestOption(null)
       setOtherRequestDetails('')
@@ -429,7 +468,12 @@ function CustomerHomes() {
       setOtherRequestOption(option)
       return
     }
-    void sendRequest(option)
+    setError('')
+    setPendingRequest({ option, details: '' })
+  }
+  const confirmRequest = () => {
+    if (!pendingPresence.item || submitLock.current) return
+    void sendRequest(pendingPresence.item.option, pendingPresence.item.details)
   }
   const loadRequests = async () => {
     setRequestsLoading(true)
@@ -455,14 +499,81 @@ function CustomerHomes() {
         </div>
         <div className="account-actions">
           <button
-            className="logout-button"
+            ref={accountTriggerRef}
+            className="customer-account-toggle"
             type="button"
-            onClick={() => setLogoutConfirmOpen(true)}
+            aria-label={accountMenuOpen ? 'Close account menu' : 'Open account menu'}
+            aria-controls="customer-account-drawer"
+            aria-expanded={accountMenuOpen}
+            onClick={() => setAccountMenuOpen((open) => !open)}
           >
-            Log out
+            <Icon name="arrow" />
           </button>
         </div>
       </header>
+
+      {accountMenuOpen && (
+        <div className="customer-account-overlay">
+          <button
+            className="customer-account-backdrop"
+            type="button"
+            aria-label="Close account menu"
+            onClick={() => setAccountMenuOpen(false)}
+          />
+          <aside
+            ref={accountMenuRef}
+            className="customer-account-drawer"
+            id="customer-account-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-account-title"
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab') return
+              const items = Array.from(event.currentTarget.querySelectorAll(FOCUSABLE))
+              if (!items.length) {
+                event.preventDefault()
+                return
+              }
+              const first = items[0]
+              const last = items[items.length - 1]
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault()
+                last.focus()
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault()
+                first.focus()
+              }
+            }}
+          >
+            <div className="customer-account-drawer-header">
+              <h2 id="customer-account-title">Account</h2>
+              <button
+                className="customer-account-close"
+                type="button"
+                aria-label="Close account menu"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <div className="customer-account-details">
+              <strong>{currentCustomer?.name || 'Chapel account'}</strong>
+              <span>{currentCustomer?.chapel || currentCustomer?.branch || 'Signed in'}</span>
+            </div>
+            <button
+              className="customer-account-logout"
+              type="button"
+              onClick={() => {
+                setAccountMenuOpen(false)
+                setLogoutConfirmOpen(true)
+              }}
+            >
+              <Icon name="logout" />
+              <span>Log out</span>
+            </button>
+          </aside>
+        </div>
+      )}
 
       {logoutPresence.mounted && (
         <ModalShell
@@ -495,7 +606,7 @@ function CustomerHomes() {
                 <div>
                   <p className="eyebrow">Choose a request</p>
                   <h2 id="customer-options-title" tabIndex={-1} data-screen-heading>{selectedCategory.title}</h2>
-                  <p>Tap an item and we’ll notify our team right away.</p>
+                  <p>Choose a request to review before sending.</p>
                 </div>
               </div>
               <div className="customer-option-list">
@@ -615,7 +726,8 @@ function CustomerHomes() {
       {otherPresence.mounted && (
         <ModalShell
           closing={otherPresence.closing}
-          hideBackdrop={Boolean(sent)}
+          hideBackdrop={Boolean(pendingRequest || sent)}
+          inert={Boolean(pendingRequest || sent)}
           onDismiss={() => { if (!submitting) setOtherRequestOption(null) }}
           className="suggestion-modal other-request-modal"
           labelledBy="other-request-title"
@@ -626,7 +738,11 @@ function CustomerHomes() {
           <h2 id="other-request-title">What do you need?</h2>
           <p className="modal-description" id="other-request-description">Tell our team what kind of request you have so they can be prepared to help.</p>
           {error && <p className="customer-login-error" role="alert">{error}</p>}
-          <form onSubmit={(event) => { event.preventDefault(); void sendRequest(otherPresence.item, otherRequestDetails) }}>
+          <form onSubmit={(event) => {
+            event.preventDefault()
+            setError('')
+            setPendingRequest({ option: otherPresence.item, details: otherRequestDetails })
+          }}>
             <label className="suggestion-label" htmlFor="other-request-details">Request details</label>
             <textarea
               className="suggestion-input suggestion-textarea"
@@ -643,10 +759,46 @@ function CustomerHomes() {
             <div className="modal-actions">
               <button type="button" onClick={() => setOtherRequestOption(null)} disabled={submitting}>Cancel</button>
               <button className="save-services-button" type="submit" disabled={submitting || !otherRequestDetails.trim()}>
-                {submitting ? <><span className="ch-spinner" aria-hidden="true" />Sending…</> : 'Send request'}
+                Review request
               </button>
             </div>
           </form>
+        </ModalShell>
+      )}
+
+      {pendingPresence.mounted && (
+        <ModalShell
+          closing={pendingPresence.closing}
+          hideBackdrop={Boolean(sent)}
+          inert={Boolean(sent)}
+          onDismiss={() => { if (!submitting) setPendingRequest(null) }}
+          className="request-confirm-modal"
+          labelledBy="request-confirm-title"
+          describedBy="request-confirm-description"
+        >
+          <div className="request-confirm-icon" aria-hidden="true">
+            <Icon name={pendingPresence.item.option.icon} />
+          </div>
+          <p className="admin-kicker">Before we send</p>
+          <h2 id="request-confirm-title">Confirm this request?</h2>
+          <p id="request-confirm-description">Our chapel team will be notified when you confirm.</p>
+          <div className="request-confirm-summary">
+            <span>Request</span>
+            <strong>{pendingPresence.item.option.label}</strong>
+            {pendingPresence.item.details.trim() && (
+              <>
+                <span>Details</span>
+                <p>{pendingPresence.item.details.trim()}</p>
+              </>
+            )}
+          </div>
+          {error && <p className="customer-login-error" role="alert">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" onClick={() => setPendingRequest(null)} disabled={submitting}>Go back</button>
+            <button className="save-services-button" type="button" onClick={confirmRequest} disabled={submitting}>
+              {submitting ? <><span className="ch-spinner" aria-hidden="true" />Sending…</> : 'Confirm and send'}
+            </button>
+          </div>
         </ModalShell>
       )}
 
