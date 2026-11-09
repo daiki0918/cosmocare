@@ -82,7 +82,8 @@ function StaffDashboard() {
   }
 
   return (
-    <div className="admin-dashboard staff-dashboard">
+    <div className={`admin-dashboard staff-dashboard ${menuOpen ? 'navigation-open' : ''}`}>
+      {menuOpen && <button className="admin-drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <a className="admin-brand" href="/staff/dashboard">
@@ -95,7 +96,7 @@ function StaffDashboard() {
             <span />
           </button>
         </div>
-        <nav className={`admin-nav staff-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Staff navigation">
+        <nav id="staff-navigation" className={`admin-nav staff-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Staff navigation">
           <p className="admin-nav-label">Workspace</p>
           <button className={active === 'requests' ? 'active' : ''} type="button" onClick={() => { setActive('requests'); setMenuOpen(false) }}>
             <span className="nav-svg-wrap">▤</span> Customer Requests
@@ -115,7 +116,12 @@ function StaffDashboard() {
 
       <main className="admin-main">
         <header className="admin-topbar">
-          <div><p className="admin-kicker">Staff workspace</p><h1>{active === 'requests' ? 'Customer requests' : active === 'suggest' ? 'Suggest a service' : 'My profile'}</h1></div>
+          <button className="admin-mobile-menu" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-controls="staff-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            <span />
+            <span />
+            <span />
+          </button>
+          <div className="admin-topbar-title"><p className="admin-kicker">Staff workspace</p><h1>{active === 'requests' ? 'Customer requests' : active === 'suggest' ? 'Suggest a service' : 'My profile'}</h1></div>
           <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><RequestSoundControl enabled={requestSoundEnabled} onEnabledChange={changeRequestSound} /><NotificationBell notifications={staffNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
         </header>
 

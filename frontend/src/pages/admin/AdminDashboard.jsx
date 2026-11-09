@@ -257,7 +257,8 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="admin-dashboard">
+    <div className={`admin-dashboard ${menuOpen ? 'navigation-open' : ''}`}>
+      {menuOpen && <button className="admin-drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <a className="admin-brand" href="/admin/dashboard">
@@ -276,7 +277,7 @@ function AdminDashboard() {
             <span />
           </button>
         </div>
-        <nav className={`admin-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Admin navigation">
+        <nav id="admin-navigation" className={`admin-nav ${menuOpen ? 'menu-open' : ''}`} aria-label="Admin navigation">
           <p className="admin-nav-label">Workspace</p>
           {navItems.filter(([id]) => isAdmin || !['accounts', 'services', 'inbox'].includes(id)).map(([id, label]) => (
             <button className={active === id ? 'active' : ''} type="button" key={id} onClick={() => { setActive(id); setMenuOpen(false) }}>
@@ -301,7 +302,12 @@ function AdminDashboard() {
 
       <main className="admin-main">
         <header className="admin-topbar">
-          <div><p className="admin-kicker">{currentDateLabel}</p><h1>{active === 'dashboard' ? 'Good morning, Admin' : navItems.find(([id]) => id === active)?.[1] || 'Settings'}</h1></div>
+          <button className="admin-mobile-menu" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-controls="admin-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            <span />
+            <span />
+            <span />
+          </button>
+          <div className="admin-topbar-title"><p className="admin-kicker">{currentDateLabel}</p><h1>{active === 'dashboard' ? 'Good morning, Admin' : navItems.find(([id]) => id === active)?.[1] || 'Settings'}</h1></div>
           <div className="admin-top-actions"><span className="admin-live"><b /> System live</span><RequestSoundControl enabled={requestSoundEnabled} onEnabledChange={changeRequestSound} /><NotificationBell notifications={adminNotifications} open={bellOpen} onToggle={() => setBellOpen((open) => !open)} onOpen={openNotification} /></div>
         </header>
 

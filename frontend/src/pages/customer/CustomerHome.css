@@ -1,0 +1,1363 @@
+/* ==========================================================================
+   CosmoCare – Customer Home
+   Mobile-first. Scoped under .customer-home. Import AFTER App.css.
+
+   Layout:   fluid (clamp / auto-fit grid / container queries) – few breakpoints
+   Motion:   one small system (durations + easings below), transform/opacity only
+   Sections: 1 Tokens · 2 Base · 3 Motion · 4 Header · 5 Layout · 6 Welcome
+             7 Services · 8 Options · 9 Requests · 10 States · 11 Footer
+             12 Dialogs · 13 Help chat · 14 Responsive · 15 Reduced motion
+   ========================================================================== */
+
+/* ---------- 1. Tokens ---------------------------------------------------- */
+.customer-home {
+  --chapel-ivory: #f7f4ee;
+  --chapel-ink: #25312d;
+  --chapel-muted: #52635b;
+  --chapel-sage: #e8eee8;
+  --chapel-sage-line: #9cad9f;
+  --chapel-blue: #315c68;
+  --chapel-blue-strong: #244954;
+  --chapel-stone: #e2dbcf;
+  --chapel-white: #fffefa;
+  --chapel-focus: #174e67;
+
+  --ch-radius-sm: 0.65rem;
+  --ch-radius-md: 0.85rem;
+  --ch-radius-lg: 1.25rem;
+
+  /* Motion system */
+  --ch-dur-fast: 120ms;
+  --ch-dur-base: 200ms;
+  --ch-dur-slow: 320ms;
+  --ch-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ch-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ch-ease-soft: cubic-bezier(0.45, 0, 0.55, 1);
+  --ch-shift: 0.875rem;        /* vertical rise for reveals */
+  --ch-shift-x: 1.25rem;       /* horizontal slide between screens */
+  --ch-sheet-shift: 2.5rem;    /* bottom-sheet travel */
+  --ch-scale-from: 0.97;       /* dialog scale-in */
+}
+
+/* ---------- 2. Base ------------------------------------------------------ */
+.customer-home {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: max(clamp(0.75rem, 3vw, 2rem), env(safe-area-inset-top))
+    max(clamp(0.75rem, 3vw, 2rem), env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom))
+    max(clamp(0.75rem, 3vw, 2rem), env(safe-area-inset-left));
+  overflow: visible;
+  color: var(--chapel-ink);
+  background: var(--chapel-ivory);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.customer-home,
+.customer-home *,
+.customer-home *::before,
+.customer-home *::after {
+  box-sizing: border-box;
+}
+
+.customer-home button,
+.customer-home textarea {
+  font: inherit;
+}
+
+.customer-home button {
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.customer-home button:disabled {
+  cursor: not-allowed;
+}
+
+.customer-home :where(h1, h2, p) {
+  overflow-wrap: anywhere;
+}
+
+.customer-home :where(h1, h2) {
+  text-wrap: balance;
+}
+
+.customer-home :where(p) {
+  text-wrap: pretty;
+}
+
+.customer-home svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.customer-home button:focus-visible,
+.customer-home a:focus-visible,
+.customer-home textarea:focus-visible {
+  outline: 3px solid var(--chapel-focus);
+  outline-offset: 3px;
+}
+
+/* Headings that receive programmatic focus on screen change */
+.customer-home [data-screen-heading]:focus {
+  outline: none;
+}
+
+.customer-home .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.customer-home .ch-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ch-spin 0.8s linear infinite;
+}
+
+/* ---------- 3. Motion ---------------------------------------------------- */
+@keyframes ch-rise        { from { opacity: 0; transform: translateY(var(--ch-shift)); } }
+@keyframes ch-screen-fwd  { from { opacity: 0; transform: translateX(var(--ch-shift-x)); } }
+@keyframes ch-screen-back { from { opacity: 0; transform: translateX(calc(var(--ch-shift-x) * -1)); } }
+@keyframes ch-fade-in     { from { opacity: 0; } }
+@keyframes ch-fade-out    { to   { opacity: 0; } }
+@keyframes ch-sheet-in    { from { opacity: 0; transform: translateY(var(--ch-sheet-shift)); } }
+@keyframes ch-sheet-out   { to   { opacity: 0; transform: translateY(var(--ch-sheet-shift)); } }
+@keyframes ch-dialog-in   { from { opacity: 0; transform: translateY(0.5rem) scale(var(--ch-scale-from)); } }
+@keyframes ch-dialog-out  { to   { opacity: 0; transform: translateY(0.25rem) scale(var(--ch-scale-from)); } }
+@keyframes ch-spin        { to   { transform: rotate(360deg); } }
+@keyframes ch-pulse       { 50%  { opacity: 0.55; } }
+@keyframes ch-draw        { from { stroke-dashoffset: 1; } }
+@keyframes ch-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(57 112 78 / 45%); }
+  50%      { box-shadow: 0 0 0 0.4rem rgb(57 112 78 / 0%); }
+}
+
+/* Screen changes: slide in from the direction of travel */
+.customer-home .customer-screen {
+  animation: ch-screen-fwd var(--ch-dur-slow) var(--ch-ease-out) backwards;
+}
+
+.customer-home .customer-panel[data-direction='back'] .customer-screen {
+  animation-name: ch-screen-back;
+}
+
+/* ---------- 4. Header ---------------------------------------------------- */
+.customer-home .customer-header,
+.customer-home .customer-content,
+.customer-home .customer-footer {
+  width: min(100%, 70rem);
+  margin-inline: auto;
+}
+
+.customer-home .customer-header {
+  min-height: 4.5rem;
+  padding: 0.65rem 0.15rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  border-radius: 0;
+  color: var(--chapel-ink);
+  background: transparent;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.customer-home .customer-header-label {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.customer-home .customer-header-label > span {
+  color: var(--chapel-ink);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.customer-home .customer-header-label small {
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: 999px;
+  color: var(--chapel-muted);
+  background: transparent;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.customer-home .customer-header .account-actions {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.customer-home .customer-header .logout-button {
+  min-width: 4rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-sm);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    color var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .customer-header .logout-button:active {
+  transform: scale(0.97);
+}
+
+/* ---------- 5. Layout ---------------------------------------------------- */
+.customer-home .customer-content {
+  flex: 1 0 auto;
+  padding: clamp(1rem, 4vw, 3rem);
+  border: 1px solid var(--chapel-stone);
+  border-radius: clamp(1rem, 2.5vw, 1.5rem);
+  background: var(--chapel-white);
+  box-shadow: 0 0.6rem 2.25rem rgb(37 49 45 / 5%);
+}
+
+.customer-home .customer-panel {
+  width: min(100%, 58rem);
+  margin-inline: auto;
+}
+
+/* Screens that are narrower than the panel become their own containers */
+.customer-home .customer-options,
+.customer-home .customer-requests {
+  width: min(100%, 46rem);
+  margin-inline: auto;
+  padding: clamp(0.25rem, 2vw, 1rem) 0;
+  container-type: inline-size;
+  container-name: ch-screen;
+}
+
+/* ---------- 6. Welcome --------------------------------------------------- */
+.customer-home .customer-welcome {
+  position: relative;
+  min-height: clamp(11rem, 30vw, 13.5rem);
+  margin: 0 0 clamp(1.75rem, 5vw, 3rem);
+  padding: clamp(1.75rem, 5vw, 3rem) clamp(1rem, 5vw, 3rem) clamp(2.25rem, 5vw, 2.5rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  border: 1px solid #d8d0c3;
+  /* The chapel-window arch scales with the screen instead of staying fixed */
+  border-radius: clamp(4.5rem, 20vw, 8rem) clamp(4.5rem, 20vw, 8rem) 1rem 1rem;
+  background: #f1eee6;
+  text-align: center;
+}
+
+.customer-home .customer-welcome > div {
+  min-width: 0;
+}
+
+.customer-home .customer-welcome .eyebrow,
+.customer-home .customer-options-heading .eyebrow,
+.customer-home .customer-requests-heading .eyebrow,
+.customer-home .notification-modal .admin-kicker {
+  margin: 0 0 0.4rem;
+  color: var(--chapel-blue);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.customer-home .customer-welcome h1 {
+  max-width: 18ch;
+  margin: 0 auto;
+  color: var(--chapel-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.875rem, 1.2rem + 3.4vw, 3.25rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+.customer-home .customer-welcome p:last-child {
+  max-width: 38ch;
+  margin: 0.85rem auto 0;
+  color: var(--chapel-muted);
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  line-height: 1.6;
+}
+
+.customer-home .customer-heart {
+  position: absolute;
+  right: clamp(0.75rem, 4vw, 2rem);
+  bottom: clamp(0.65rem, 2vw, 1rem);
+  width: clamp(1.75rem, 5vw, 2.5rem);
+  height: clamp(1.75rem, 5vw, 2.5rem);
+  color: var(--chapel-blue);
+  opacity: 0.75;
+}
+
+.customer-home .customer-heart svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.5;
+}
+
+/* ---------- 7. Services -------------------------------------------------- */
+.customer-home .customer-service-heading {
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+
+.customer-home .customer-service-heading h2 {
+  margin: 0;
+  color: var(--chapel-ink);
+  font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.customer-home .customer-available {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.8rem 0.35rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid #bdcfc2;
+  border-radius: 999px;
+  color: #355845;
+  background: #f1f5f0;
+  font-size: 0.8125rem;
+}
+
+/* The one ambient motion: a slow, soft “someone is here” glow */
+.customer-home .customer-available i {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #39704e;
+  animation: ch-glow 3.6s var(--ch-ease-soft) infinite;
+}
+
+/* Cards flow into as many columns as fit – no breakpoint needed */
+.customer-home .service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.5rem), 1fr));
+  gap: clamp(0.65rem, 2vw, 1rem);
+}
+
+.customer-home .customer-service-card {
+  position: relative;
+  min-width: 0;
+  min-height: clamp(5.5rem, 12vw, 7.75rem);
+  padding: clamp(0.75rem, 2.5vw, 1.15rem);
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  justify-content: initial;
+  gap: 0.85rem;
+  border: 1px solid var(--chapel-stone);
+  border-bottom: 3px solid var(--chapel-sage-line);
+  border-radius: var(--ch-radius-md);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  box-shadow: none;
+  text-align: left;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    background-color var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .customer-service-card.is-revealing {
+  animation: ch-rise var(--ch-dur-slow) var(--ch-ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+.customer-home .customer-service-card:active:not(:disabled) {
+  transform: scale(0.985);
+  background: var(--chapel-sage);
+}
+
+.customer-home .customer-service-card:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.customer-home .customer-service-icon,
+.customer-home .customer-option-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d3ddd4;
+  border-radius: var(--ch-radius-sm);
+  color: var(--chapel-blue);
+  background: var(--chapel-sage);
+}
+
+.customer-home .customer-service-icon svg,
+.customer-home .customer-option-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.customer-home .customer-service-card .service-text {
+  min-width: 0;
+  display: block;
+}
+
+.customer-home .customer-service-card .service-text strong,
+.customer-home .customer-service-card .service-text small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.customer-home .customer-service-card .service-text strong {
+  color: var(--chapel-ink);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.customer-home .customer-service-card .service-text small {
+  margin-top: 0.25rem;
+  color: var(--chapel-muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Skeletons keep the exact footprint of real cards, so nothing jumps */
+.customer-home .customer-service-card.is-skeleton {
+  pointer-events: none;
+  border-bottom-color: var(--chapel-stone);
+  animation: ch-pulse 1.6s var(--ch-ease-soft) infinite;
+}
+
+.customer-home .is-skeleton .customer-service-icon {
+  border-color: transparent;
+  background: var(--chapel-stone);
+}
+
+.customer-home .is-skeleton .service-text strong,
+.customer-home .is-skeleton .service-text small {
+  border-radius: 999px;
+  background: var(--chapel-stone);
+}
+
+.customer-home .is-skeleton .service-text strong { width: 65%; height: 1rem; }
+.customer-home .is-skeleton .service-text small  { width: 90%; height: 0.75rem; margin-top: 0.6rem; }
+
+.customer-home .customer-view-requests {
+  width: 100%;
+  min-height: 3.25rem;
+  margin-top: 1rem;
+  padding: 0.65rem 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid #c7d2c8;
+  border-radius: var(--ch-radius-md);
+  color: var(--chapel-blue);
+  background: #f3f6f1;
+  text-align: left;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    background-color var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .customer-view-requests:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.customer-home .customer-view-requests:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.customer-home .customer-requests-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: #355845;
+}
+
+.customer-home .customer-requests-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke-width: 1.8;
+}
+
+.customer-home .customer-requests-icon .ch-spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Hover only where a real pointer exists – never “stuck” on touch screens */
+@media (hover: hover) {
+  .customer-home .customer-header .logout-button:hover {
+    border-color: var(--chapel-blue);
+    color: var(--chapel-blue);
+  }
+
+  .customer-home .customer-service-card:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--chapel-sage-line);
+    border-bottom-color: var(--chapel-blue);
+    background: #f7f8f3;
+  }
+
+  .customer-home .customer-view-requests:hover:not(:disabled) {
+    border-color: var(--chapel-blue);
+    background: #e9efe9;
+  }
+
+  .customer-home .customer-back-link:hover {
+    border-color: var(--chapel-blue);
+    background: #f3f6f1;
+  }
+
+  .customer-home .customer-option-button:hover:not(:disabled) {
+    border-color: var(--chapel-sage-line);
+    background: #f7f8f3;
+  }
+
+  .customer-home .notification-modal .modal-close:hover {
+    background: var(--chapel-sage);
+  }
+
+  .customer-home .notification-modal .modal-actions .save-services-button:hover:not(:disabled) {
+    background: var(--chapel-blue-strong);
+  }
+
+  .customer-home .notification-modal .delete-confirm-button:hover:not(:disabled) {
+    background: #66292a;
+  }
+}
+
+/* ---------- 8. Options screen ------------------------------------------- */
+.customer-home .customer-back-link {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.85rem 0.5rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-sm);
+  color: var(--chapel-blue);
+  background: var(--chapel-white);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    background-color var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .customer-back-link:active {
+  transform: scale(0.97);
+}
+
+.customer-home .customer-back-link svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke-width: 1.8;
+}
+
+.customer-home .customer-options-heading {
+  margin: 1.5rem 0 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.customer-home .customer-options-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d3ddd4;
+  border-radius: 1rem;
+  color: var(--chapel-blue);
+  background: var(--chapel-sage);
+}
+
+.customer-home .customer-options-icon svg {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.customer-home .customer-options-heading > div {
+  min-width: 0;
+}
+
+.customer-home .customer-options-heading h2,
+.customer-home .customer-requests-heading h2 {
+  margin: 0;
+  color: var(--chapel-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.625rem, 1.2rem + 2vw, 2.35rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.customer-home .customer-options-heading p:last-child {
+  margin: 0.35rem 0 0;
+  color: var(--chapel-muted);
+  font-size: 1rem;
+}
+
+.customer-home .customer-option-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.customer-home .customer-option-button {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.5rem;
+  padding: 0.8rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  overflow: hidden;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-md);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  text-align: left;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    background-color var(--ch-dur-base) var(--ch-ease-out),
+    opacity var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .customer-option-button:active:not(:disabled) {
+  transform: scale(0.985);
+  background: var(--chapel-sage);
+}
+
+.customer-home .customer-option-button:disabled {
+  cursor: default;
+}
+
+/* Dim the other options while one is sending, but keep the active one clear */
+.customer-home .customer-option-button:disabled:not([aria-busy='true']):not(.is-cooling) {
+  opacity: 0.55;
+}
+
+/* Cooldown: a thin bar drains along the bottom edge – no layout shift */
+.customer-home .customer-option-button.is-cooling::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--chapel-blue);
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+.customer-home .customer-option-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.customer-home .customer-option-copy strong,
+.customer-home .customer-option-copy small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.customer-home .customer-option-copy strong {
+  color: var(--chapel-ink);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.customer-home .customer-option-copy small {
+  margin-top: 0.2rem;
+  color: var(--chapel-muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Fixed minimum width so “Request” → “Sending…” → “Wait 28s” never reflows the row */
+.customer-home .customer-option-action,
+.customer-home .customer-option-wait {
+  min-width: 5.25rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  color: var(--chapel-blue);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-align: right;
+}
+
+.customer-home .customer-option-wait .ch-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.customer-home .customer-quick-note {
+  margin: 1rem 0 0;
+  color: var(--chapel-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+/* ---------- 9. Requests screen ------------------------------------------ */
+.customer-home .customer-requests-heading {
+  margin: 1.5rem 0;
+}
+
+.customer-home .customer-request-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+}
+
+.customer-home .customer-request-list li {
+  min-width: 0;
+  min-height: 4.5rem;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.65rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-md);
+  background: var(--chapel-white);
+  box-shadow: none;
+  animation: ch-rise var(--ch-dur-slow) var(--ch-ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.customer-home .customer-request-list li > div {
+  min-width: 0;
+}
+
+.customer-home .customer-request-list strong,
+.customer-home .customer-request-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.customer-home .customer-request-list strong {
+  color: var(--chapel-ink);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.customer-home .customer-request-list small {
+  margin-top: 0.25rem;
+  color: var(--chapel-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.customer-home .customer-request-status {
+  max-width: 100%;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #c8b880;
+  border-radius: 999px;
+  color: #614d15;
+  background: #f6f0dc;
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transition: background-color var(--ch-dur-base) var(--ch-ease-out),
+    color var(--ch-dur-base) var(--ch-ease-out),
+    border-color var(--ch-dur-base) var(--ch-ease-out);
+}
+
+.customer-home .customer-request-status.progress { border-color: #b6cbd0; color: #264c57; background: #eaf1f2; }
+.customer-home .customer-request-status.complete { border-color: #b6cbb9; color: #315a3d; background: #edf4ed; }
+.customer-home .customer-request-status.cancelled { border-color: #d0ccc4; color: #4f514e; background: #efede8; }
+
+/* ---------- 10. States --------------------------------------------------- */
+.customer-home .customer-empty-state {
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-md);
+  color: var(--chapel-muted);
+  background: #f7f6f1;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.customer-home .customer-login-error {
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d7aaa2;
+  border-radius: 0.75rem;
+  color: #702d26;
+  background: #f9eeeb;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  animation: ch-rise var(--ch-dur-base) var(--ch-ease-out) backwards;
+}
+
+/* ---------- 11. Footer --------------------------------------------------- */
+.customer-home .customer-footer {
+  padding: 1rem 0.15rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.customer-home .customer-footer .brand {
+  min-height: 3.5rem;
+  gap: 0.65rem;
+  color: var(--chapel-ink);
+}
+
+.customer-home .customer-footer .brand-mark {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--ch-radius-sm);
+  background: var(--chapel-sage);
+}
+
+.customer-home .customer-footer .brand-mark img {
+  width: 2.25rem;
+  height: 2.25rem;
+  object-fit: contain;
+}
+
+.customer-home .customer-footer .brand strong {
+  font-size: 0.9375rem;
+}
+
+.customer-home .customer-footer .brand small {
+  color: var(--chapel-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---------- 12. Dialogs: bottom sheet on phones, dialog on larger ------- */
+.customer-home .notification-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgb(37 49 45 / 52%);
+  animation: ch-fade-in var(--ch-dur-base) var(--ch-ease-out) backwards;
+}
+
+.customer-home .notification-overlay.is-closing {
+  pointer-events: none;
+  animation: ch-fade-out var(--ch-dur-base) var(--ch-ease-in) forwards;
+}
+
+/* When one dialog hands over to another, keep the backdrop steady */
+.customer-home .notification-overlay.is-handoff-out { background: transparent; animation: none; }
+.customer-home .notification-overlay.is-handoff-in  { animation: none; }
+
+.customer-home .notification-modal {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 0.75rem);
+  /* auto margins = bottom-aligned sheet that can still scroll when tall */
+  margin: auto 0 0;
+  padding: clamp(1.25rem, 5vw, 2rem)
+    max(clamp(1.25rem, 5vw, 2rem), env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom))
+    max(clamp(1.25rem, 5vw, 2rem), env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--chapel-stone);
+  border-bottom: 0;
+  border-radius: var(--ch-radius-lg) var(--ch-radius-lg) 0 0;
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  box-shadow: 0 -0.5rem 2.5rem rgb(27 37 33 / 18%);
+  animation: ch-sheet-in var(--ch-dur-slow) var(--ch-ease-out) backwards;
+}
+
+.customer-home .notification-modal:focus {
+  outline: none;
+}
+
+.customer-home .notification-overlay.is-closing .notification-modal {
+  animation: ch-sheet-out var(--ch-dur-base) var(--ch-ease-in) forwards;
+}
+
+.customer-home .notification-modal h2 {
+  margin: 0 0 0.5rem;
+  color: var(--chapel-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.4rem, 1.15rem + 1.2vw, 1.7rem);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.customer-home .notification-modal p:not(.admin-kicker) {
+  color: var(--chapel-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.customer-home .notification-modal p strong {
+  color: var(--chapel-ink);
+}
+
+.customer-home .account-action-modal {
+  text-align: center;
+}
+
+.customer-home .account-action-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto 0.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.customer-home .account-action-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  stroke-width: 1.8;
+}
+
+.customer-home .account-action-icon-success { color: #315a3d; background: #edf4ed; }
+.customer-home .account-action-icon-danger  { color: #702d26; background: #f9eeeb; }
+
+/* Success tick draws itself once */
+.customer-home .ch-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: ch-draw 520ms var(--ch-ease-out) backwards;
+}
+
+.customer-home .ch-draw-ring  { animation-delay: 120ms; }
+.customer-home .ch-draw-check { animation-delay: 360ms; }
+
+.customer-home .notification-modal .modal-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--chapel-ink);
+  background: transparent;
+  transition: background-color var(--ch-dur-base) var(--ch-ease-out);
+}
+
+.customer-home .notification-modal .modal-close svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.customer-home .modal-description {
+  margin-bottom: 0.5rem;
+}
+
+.customer-home .other-request-modal {
+  text-align: left;
+}
+
+.customer-home .other-request-modal .suggestion-label {
+  margin: 1rem 0 0.4rem;
+  display: block;
+  color: var(--chapel-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.customer-home .other-request-modal .suggestion-textarea {
+  display: block;
+  width: 100%;
+  min-height: 8rem;
+  padding: 0.8rem;
+  border: 1px solid #aaa99e;
+  border-radius: var(--ch-radius-sm);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  font-size: 1rem; /* 16px – stops iOS Safari zooming on focus */
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color var(--ch-dur-base) var(--ch-ease-out),
+    box-shadow var(--ch-dur-base) var(--ch-ease-out);
+}
+
+.customer-home .other-request-modal .suggestion-textarea:focus {
+  border-color: var(--chapel-focus);
+  box-shadow: 0 0 0 3px rgb(23 78 103 / 18%);
+}
+
+.customer-home .other-request-character-count {
+  margin-top: 0.35rem;
+  color: var(--chapel-muted);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+
+/* Primary action sits on top on phones (column-reverse), inline on wider screens */
+.customer-home .notification-modal .modal-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.65rem;
+}
+
+.customer-home .notification-modal .modal-actions > button {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.55rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--chapel-stone);
+  border-radius: var(--ch-radius-sm);
+  color: var(--chapel-ink);
+  background: var(--chapel-white);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: background-color var(--ch-dur-base) var(--ch-ease-out),
+    opacity var(--ch-dur-base) var(--ch-ease-out),
+    transform var(--ch-dur-fast) var(--ch-ease-out);
+}
+
+.customer-home .notification-modal .modal-actions > button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.customer-home .notification-modal .modal-actions > button:disabled {
+  opacity: 0.6;
+}
+
+.customer-home .notification-modal .modal-actions .save-services-button {
+  border-color: var(--chapel-blue);
+  color: #fff;
+  background: var(--chapel-blue);
+}
+
+.customer-home .notification-modal .delete-confirm-button {
+  border-color: #7d332c;
+  color: #fff;
+  background: #7d332c;
+}
+
+/* ---------- 13. Help chat (your existing rules, unchanged) -------------- */
+.customer-home .customer-chat-widget {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: min(100%, 70rem);
+  margin: 0.5rem auto 0;
+  padding-inline: 0.15rem;
+  gap: 0.75rem;
+}
+
+.customer-home .customer-chat-widget.open {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.customer-home .customer-chat-launcher {
+  width: 3.75rem;
+  height: 3.75rem;
+  border: 2px solid var(--chapel-white);
+  color: #fff;
+  background: var(--chapel-blue);
+  box-shadow: 0 0.25rem 1rem rgb(37 49 45 / 22%);
+}
+
+.customer-home .customer-chat-launcher:hover {
+  background: var(--chapel-blue-strong);
+  box-shadow: 0 0.25rem 1rem rgb(37 49 45 / 22%);
+}
+
+.customer-home .customer-chat-window {
+  width: min(25.625rem, calc(100vw - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  max-height: min(42rem, calc(100dvh - 6.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  border-color: var(--chapel-stone);
+  border-radius: 1rem;
+  box-shadow: 0 0.75rem 2.5rem rgb(27 37 33 / 20%);
+}
+
+.customer-home .customer-chat-header {
+  background: var(--chapel-blue);
+}
+
+.customer-home .customer-chat-header small {
+  color: #f0f3ee;
+}
+
+.customer-home .customer-chat-compose textarea,
+.customer-home .customer-chat-support textarea {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.customer-home .customer-chat-faqs button,
+.customer-home .customer-chat-service-list button,
+.customer-home .customer-chat-action,
+.customer-home .customer-chat-header > button,
+.customer-home .customer-chat-support > button,
+.customer-home .customer-chat-compose > button {
+  min-height: 2.75rem;
+}
+
+/* ---------- 14. Responsive ---------------------------------------------- */
+
+/* Container queries: respond to the space a screen actually has */
+@container ch-screen (min-width: 28rem) {
+  .customer-home .customer-request-list li {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .customer-home .customer-request-status {
+    max-width: 45%;
+  }
+}
+
+@container ch-screen (max-width: 21rem) {
+  .customer-home .customer-options-heading {
+    gap: 0.75rem;
+  }
+
+  .customer-home .customer-options-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--ch-radius-sm);
+  }
+
+  .customer-home .customer-option-button {
+    padding-inline: 0.7rem;
+    gap: 0.6rem;
+  }
+
+  .customer-home .customer-option-action,
+  .customer-home .customer-option-wait {
+    min-width: 0;
+    max-width: 4.5rem;
+    white-space: normal;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 22.5rem) {
+  .customer-home .customer-service-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Tablet and up: centered dialog instead of bottom sheet, row-style header chip */
+@media (min-width: 40rem) {
+  .customer-home .customer-header-label {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+  }
+
+  .customer-home .customer-view-requests {
+    width: auto;
+    min-width: 18rem;
+  }
+}
+
+@media (min-width: 40rem), (max-height: 32.5rem) and (orientation: landscape) {
+  .customer-home .notification-overlay {
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+      max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  .customer-home .notification-modal {
+    width: min(100%, 32rem);
+    max-height: none;
+    margin: auto;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border-bottom: 1px solid var(--chapel-stone);
+    border-radius: 1rem;
+    box-shadow: 0 1.25rem 3rem rgb(27 37 33 / 18%);
+    animation-name: ch-dialog-in;
+  }
+
+  .customer-home .notification-overlay.is-closing .notification-modal {
+    animation-name: ch-dialog-out;
+  }
+
+  .customer-home .notification-modal .modal-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .customer-home .account-action-modal .modal-actions {
+    justify-content: center;
+  }
+
+  .customer-home .notification-modal .modal-actions > button {
+    width: auto;
+    min-width: 8rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .customer-home .customer-header {
+    padding-top: 1rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .customer-home .customer-service-card {
+    padding: 1.25rem;
+  }
+}
+
+/* Short landscape phones: reclaim vertical space */
+@media (max-height: 32.5rem) and (orientation: landscape) {
+  .customer-home .customer-content {
+    padding-block: 1.25rem;
+  }
+
+  .customer-home .customer-welcome {
+    min-height: 8.5rem;
+    margin-bottom: 1.5rem;
+    padding-block: 1.25rem 1.75rem;
+  }
+
+  .customer-home .customer-welcome h1 {
+    font-size: 1.75rem;
+  }
+
+  .customer-home .customer-chat-widget {
+    position: relative;
+    inset: auto;
+    width: min(100%, 70rem);
+    margin: 0.25rem auto 0;
+  }
+
+  .customer-home .customer-chat-widget.open {
+    position: fixed;
+    inset: auto max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) auto;
+    width: auto;
+    margin: 0;
+  }
+
+  .customer-home .customer-chat-window {
+    max-height: calc(100dvh - 5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 30rem) {
+  .customer-home .customer-chat-widget.open {
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .customer-home .customer-chat-window {
+    width: min(25.625rem, calc(100vw - 1.5rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-height: min(42rem, calc(100dvh - 5.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  }
+}
+
+/* ---------- 15. Reduced motion ------------------------------------------
+   Keep state changes understandable, drop movement: short fades only.
+   The loading spinner stays (it is feedback, not decoration). */
+@media (prefers-reduced-motion: reduce) {
+  .customer-home {
+    --ch-dur-fast: 80ms;
+    --ch-dur-base: 100ms;
+    --ch-dur-slow: 140ms;
+    --ch-shift: 0px;
+    --ch-shift-x: 0px;
+    --ch-sheet-shift: 0px;
+    --ch-scale-from: 1;
+    scroll-behavior: auto;
+  }
+
+  .customer-home .customer-available i,
+  .customer-home .customer-service-card.is-skeleton {
+    animation: none;
+  }
+
+  .customer-home .customer-option-button.is-cooling::after {
+    transition: none;
+  }
+
+  .customer-home .ch-draw {
+    animation: none;
+  }
+
+  .customer-home .customer-service-card.is-revealing,
+  .customer-home .customer-request-list li {
+    animation-delay: 0ms;
+  }
+}
