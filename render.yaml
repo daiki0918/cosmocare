@@ -10,3 +10,7 @@ services:
         sync: false
       - key: HOST
         value: 0.0.0.0
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini

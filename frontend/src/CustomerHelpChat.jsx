@@ -40,6 +40,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
   const sendingRef = useRef(false)
+  const conversationRef = useRef(0)
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)))
@@ -48,6 +49,21 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, open, sending])
+
+  const closeChat = () => {
+    conversationRef.current += 1
+    sendingRef.current = false
+    setOpen(false)
+    setMessages([welcomeMessage])
+    setQuestion('')
+    setSupportMessage('')
+    setSupportPrompt(false)
+    setSupportThreadId(null)
+    setSending(false)
+    setSendingSupport(false)
+    setError('')
+    localStorage.removeItem(storageKey)
+  }
 
   useEffect(() => {
     if (!open || !supportThreadId) return undefined
@@ -103,6 +119,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   const askQuestion = async (value) => {
     const text = value.trim()
     if (!text || sendingRef.current) return
+    const conversationVersion = conversationRef.current
     sendingRef.current = true
     setSending(true)
     setQuestion('')
@@ -128,6 +145,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         signal: AbortSignal.timeout(25000),
         body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
       })
+      if (conversationRef.current !== conversationVersion) return
       if (response.supportThreadId) setSupportThreadId(response.supportThreadId)
       setMessages((items) => [...items, {
         id: `${Date.now()}-bot`,
@@ -140,8 +158,11 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         actionType: response.supportThreadId ? 'support' : undefined,
         createdAt: new Date().toISOString(),
       }])
-    } catch {
-      const failure = 'I’m sorry, CosmoCare Help is temporarily unavailable. Please try again in a moment, or use the services page to contact the team.'
+    } catch (requestError) {
+      if (conversationRef.current !== conversationVersion) return
+      const failure = requestError instanceof Error && requestError.message
+        ? requestError.message
+        : 'I’m sorry, CosmoCare Help is temporarily unavailable. Please try again in a moment, or use the services page to contact the team.'
       setMessages((items) => [...items, {
         id: `${Date.now()}-error`,
         sender: 'bot',
@@ -149,8 +170,10 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         createdAt: new Date().toISOString(),
       }])
     } finally {
-      sendingRef.current = false
-      setSending(false)
+      if (conversationRef.current === conversationVersion) {
+        sendingRef.current = false
+        setSending(false)
+      }
     }
   }
 
@@ -170,6 +193,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
     event.preventDefault()
     const text = supportMessage.trim()
     if (!text || sendingSupport || !supportThreadId) return
+    const conversationVersion = conversationRef.current
     setSendingSupport(true)
     setError('')
     try {
@@ -177,6 +201,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         method: 'POST',
         body: JSON.stringify({ text }),
       })
+      if (conversationRef.current !== conversationVersion) return
       setSupportThreadId(conversation._id)
       setSupportMessage('')
       setSupportPrompt(false)
@@ -187,9 +212,9 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         createdAt: new Date().toISOString(),
       }])
     } catch (requestError) {
-      setError(requestError.message)
+      if (conversationRef.current === conversationVersion) setError(requestError.message)
     } finally {
-      setSendingSupport(false)
+      if (conversationRef.current === conversationVersion) setSendingSupport(false)
     }
   }
 
@@ -218,7 +243,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
           <header className="customer-chat-header">
             <span className="customer-chat-avatar" aria-hidden="true">CC</span>
             <div><strong>CosmoCare Help</strong><small><i /> AI guest assistance</small></div>
-            <button type="button" aria-label="Close help chat" onClick={() => setOpen(false)}>×</button>
+            <button type="button" aria-label="Close help chat" onClick={closeChat}>×</button>
           </header>
           <div className="customer-chat-messages" aria-live="polite">
             {messages.map((message) => (
@@ -279,7 +304,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
           </form>
         </section>
       )}
-      <button className={`customer-chat-launcher ${open ? 'open' : ''}`} type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? 'Close help and FAQs' : 'Open help and FAQs'} aria-expanded={open}>
+      <button className={`customer-chat-launcher ${open ? 'open' : ''}`} type="button" onClick={open ? closeChat : () => setOpen(true)} aria-label={open ? 'Close help and FAQs' : 'Open help and FAQs'} aria-expanded={open}>
         {open ? '×' : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z" /><path d="M8 11h.01M12 11h.01M16 11h.01" /></svg>}
       </button>
     </div>
