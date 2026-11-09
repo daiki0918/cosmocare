@@ -355,6 +355,59 @@ async function getChatCompletion({ text, history, services, requests }) {
   }
 }
 
+function getFallbackChatIntent(text, history, services, requests) {
+  const normalized = text.toLowerCase();
+  const intent = {
+    intent: "general",
+    reply: "",
+    requestId: "",
+    newRequest: "",
+    newDetails: "",
+    requestHint: "",
+  };
+
+  if (/\b(cancel|call off|withdraw)\b/.test(normalized)) {
+    intent.intent = "cancel";
+  } else if (/\b(change|update|edit|modify|switch)\b/.test(normalized)) {
+    intent.intent = "change";
+  } else if (/\b(status|progress|track|where is|where's|my requests?)\b/.test(normalized)) {
+    intent.intent = "status";
+  } else if (/\b(available services|what services|which services|list services|show services|services do you offer)\b/.test(normalized) || /\bservices\b/.test(normalized)) {
+    intent.intent = "services";
+  } else if (/\b(send|message|tell)\b/.test(normalized) && /\b(staff|team|support)\b/.test(normalized)) {
+    intent.intent = "contact_staff";
+  } else if (/\b(contact|reach|speak|talk)\b/.test(normalized) && /\b(staff|team|support|person|someone)\b/.test(normalized)) {
+    intent.intent = "contact_info";
+  } else if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)) {
+    intent.reply = "Hello! I can help you find available services, check or update your requests, cancel a request, or contact the CosmoCare team. What do you need help with?";
+  } else {
+    const previousMessage = history.at(-1)?.content?.toLowerCase() || "";
+    if (/\b(service|services)\b/.test(normalized)) {
+      intent.intent = "services";
+    } else if (/\b(request|requests)\b/.test(normalized) && /\b(status|check|show|see|find)\b/.test(normalized)) {
+      intent.intent = "status";
+    } else if (/\b(help|question|support)\b/.test(normalized) || !previousMessage) {
+      intent.reply = "I can help with available services, checking or updating your requests, cancelling a request, or contacting the CosmoCare team. What would you like to do?";
+    } else {
+      intent.reply = "I’m not sure I understood that. I can help with available services, your request status, changing or cancelling a request, or contacting the CosmoCare team.";
+    }
+  }
+
+  if (intent.intent === "change" || intent.intent === "cancel") {
+    const matchingRequests = requests.filter((request) => normalized.includes(request.request.toLowerCase()));
+    if (matchingRequests.length === 1) intent.requestHint = matchingRequests[0].request;
+    if (intent.intent === "change") {
+      const newService = services.find((service) => normalized.includes(service.name.toLowerCase())
+        && !matchingRequests.some((request) => request.request === service.name));
+      if (newService) {
+        intent.newRequest = newService.name;
+      }
+    }
+  }
+
+  return intent;
+}
+
 function isChatConfirmation(text, affirmative) {
   const normalized = text.toLowerCase().trim().replace(/[.!?]+$/, "");
   const phrases = affirmative
@@ -507,10 +560,6 @@ app.post("/api/chat", authenticate, async (req, res, next) => {
       : "";
     if (!text) return res.status(400).json({ message: "Please enter a message before sending." });
     if (text.length > 2000) return res.status(400).json({ message: "Messages must be 2,000 characters or fewer." });
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(503).json({ message: "CosmoCare Help is temporarily unavailable. Please contact the support team from the services page." });
-    }
-
     const now = Date.now();
     const userKey = req.user._id.toString();
     const bucket = chatRateLimits.get(userKey) || { startedAt: now, count: 0 };
@@ -569,7 +618,9 @@ app.post("/api/chat", authenticate, async (req, res, next) => {
 
     let intent;
     try {
-      intent = await getChatCompletion({ text, history, services, requests });
+      intent = process.env.OPENAI_API_KEY?.trim()
+        ? await getChatCompletion({ text, history, services, requests })
+        : getFallbackChatIntent(text, history, services, requests);
     } catch (error) {
       console.error("CosmoCare chat AI request failed:", error.message);
       return res.status(503).json({ message: "CosmoCare Help couldn't reach its AI service just now. Please try again, or contact the support team from the services page." });
