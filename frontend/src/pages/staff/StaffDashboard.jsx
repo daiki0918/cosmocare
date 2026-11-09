@@ -199,7 +199,7 @@ function NotificationModal({ notification, onClose }) {
 export default StaffDashboard
 
 function StaffRequestRow({ item, onUpdate }) {
-  const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : 'new'
+  const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : item.status === 'Cancelled' ? 'cancelled' : 'new'
   return (
     <div className="request-row request-management-row">
       <span className="request-cell request-cell-request">
@@ -214,7 +214,7 @@ function StaffRequestRow({ item, onUpdate }) {
         </span>
       </span>
       <span className="request-cell" data-label="Received"><time>{item.createdAt ? new Date(item.createdAt).toLocaleString() : item.time}</time></span>
-      <span className="request-cell" data-label="Status"><select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, event.target.value)}><option>Pending</option><option>In progress</option><option>Completed</option></select></span>
+      <span className="request-cell" data-label="Status"><select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, event.target.value)}><option>Pending</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></span>
     </div>
   )
 }

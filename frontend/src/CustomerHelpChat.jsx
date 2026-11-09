@@ -1,77 +1,56 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 
-function getFaqReply(text, services) {
-  const query = text.toLowerCase()
-  if (/status|track|pending|progress|previous request|my request/.test(query)) {
-    return {
-      text: 'You can see the latest status of your chapel’s requests in “View my requests”.',
-      action: 'View my requests',
-      actionType: 'requests',
-    }
+const welcomeMessage = {
+  id: 'welcome',
+  sender: 'bot',
+  text: 'Hello! I can help you find services, check your requests, or contact the CosmoCare team. What would you like help with?',
+  createdAt: new Date().toISOString(),
+}
+
+function getConversationStorageKey() {
+  let userId = 'guest'
+  try {
+    userId = JSON.parse(localStorage.getItem('cosmocare-user') || '{}').id || userId
+  } catch {
+    // Start a fresh conversation when stored account data is invalid.
   }
-  if (/cancel|change|edit|update request/.test(query)) {
-    return {
-      text: 'Requests can’t be edited or cancelled in this chat. Send the team a message below and include the request name and chapel room.',
-      action: 'Message the support team',
-      actionType: 'support',
-    }
-  }
-  if (/staff|help|assistance|urgent|director|speak|call/.test(query)) {
-    const assistanceService = services.find((service) => /staff|director|coordinator|assistance/i.test(`${service.name} ${service.description}`))
-    return {
-      text: assistanceService
-        ? 'Tap below to open the assistance options and send a request to the team.'
-        : 'Choose an available service on the home screen, or send a message to the support team below.',
-      action: assistanceService ? assistanceService.name : 'Browse available services',
-      actionType: assistanceService ? 'service' : 'services',
-      service: assistanceService,
-    }
-  }
-  if (/service|offer|available|what can|menu|water|coffee|food|chair|clean|restroom|parking|flower|aircon|air con|light|supply/.test(query)) {
-    return {
-      text: services.length
-        ? 'These are the services currently available. Choose a category to continue:'
-        : 'There are no services available right now. You can send a message to the support team below.',
-      actionType: 'service-list',
-    }
-  }
-  if (/where|location|chapel room|room/.test(query)) {
-    return {
-      text: 'When you send a service request, the chapel location is added automatically. If you need help at a specific room, choose a service and include that location in the request.',
-      action: 'Browse available services',
-      actionType: 'services',
-    }
-  }
-  if (/thank/.test(query)) {
-    return { text: 'You’re welcome. I’m here if you need help with a service or request status.' }
-  }
-  return {
-    text: 'I don’t have an answer for that yet. You can send your question to the CosmoCare support team and an administrator will receive it.',
-    action: 'Send question to support',
-    actionType: 'support',
+  return `cosmocare-help-chat:${userId}`
+}
+
+function loadConversation(storageKey) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) || 'null')
+    return Array.isArray(stored) && stored.length ? stored : [welcomeMessage]
+  } catch {
+    return [welcomeMessage]
   }
 }
 
 function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([
-    { id: 'welcome', sender: 'bot', text: 'Hello! I can help you find services, check request status, or contact our support team. What would you like to know?' },
-  ])
+  const [storageKey] = useState(getConversationStorageKey)
+  const [messages, setMessages] = useState(() => loadConversation(storageKey))
   const [question, setQuestion] = useState('')
   const [supportMessage, setSupportMessage] = useState('')
   const [supportPrompt, setSupportPrompt] = useState(false)
   const [supportThreadId, setSupportThreadId] = useState(null)
+  const [sending, setSending] = useState(false)
   const [sendingSupport, setSendingSupport] = useState(false)
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
+  const sendingRef = useRef(false)
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)))
+  }, [messages, storageKey])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, open])
+  }, [messages, open, sending])
 
   useEffect(() => {
-    if (!open) return undefined
+    if (!open || !supportThreadId) return undefined
 
     let active = true
     let loading = false
@@ -81,34 +60,31 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
       try {
         const conversations = await api('/api/support/messages')
         if (!active) return
-
-        const latestConversation = conversations.reduce((latest, conversation) => (
-          !latest || new Date(conversation.updatedAt) > new Date(latest.updatedAt)
-            ? conversation
-            : latest
-        ), null)
-        if (latestConversation) setSupportThreadId(latestConversation._id)
-        const history = conversations.flatMap((conversation) => {
-          const firstMessage = String(conversation.message || '').replace(/\n\nChapel:[\s\S]*$/, '').trim()
-          const customerMessage = firstMessage
-            ? [{ id: `${conversation._id}-question`, sender: 'user', text: firstMessage }]
-            : []
-          const replies = (conversation.replies || []).map((reply, index) => ({
+        const conversation = conversations.find((item) => item._id === supportThreadId)
+        if (!conversation) return
+        const firstMessage = String(conversation.message || '').replace(/\n\nChapel:[\s\S]*$/, '').trim()
+        const history = [
+          ...(firstMessage ? [{
+            id: `${conversation._id}-question`,
+            sender: 'user',
+            text: firstMessage,
+            createdAt: conversation.createdAt,
+          }] : []),
+          ...(conversation.replies || []).map((reply, index) => ({
             id: reply._id || `${conversation._id}-reply-${index}`,
             sender: reply.senderType === 'Chapel' ? 'user' : 'admin',
             text: reply.text,
-          }))
-          return [...customerMessage, ...replies]
-        })
-
-        if (history.length) {
-          setMessages((items) => {
-            const existing = new Map(items.filter((item) => item.id !== 'welcome').map((item) => [item.id, item]))
-            history.forEach((item) => existing.set(item.id, item))
-            return Array.from(existing.values())
+            createdAt: reply.createdAt,
+          })),
+        ]
+        setMessages((items) => {
+          const existing = new Map(items.map((item) => [item.id, item]))
+          history.forEach((item) => {
+            const alreadyShown = item.sender === 'user' && items.some((current) => current.sender === 'user' && current.text === item.text)
+            if (!alreadyShown) existing.set(item.id, item)
           })
-        }
-        setError('')
+          return Array.from(existing.values())
+        })
       } catch (requestError) {
         if (active) setError(requestError.message)
       } finally {
@@ -122,102 +98,99 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
       active = false
       window.clearInterval(interval)
     }
-  }, [open])
+  }, [open, supportThreadId])
 
-  const addBotMessage = (reply) => {
-    setMessages((items) => [...items, { id: `${Date.now()}-${items.length}`, sender: 'bot', ...reply }])
-    setSupportPrompt(reply.actionType === 'support' && !supportThreadId)
-  }
-
-  const askQuestion = (text) => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    setMessages((items) => [...items, { id: `${Date.now()}-user`, sender: 'user', text: trimmed }])
+  const askQuestion = async (value) => {
+    const text = value.trim()
+    if (!text || sendingRef.current) return
+    sendingRef.current = true
+    setSending(true)
     setQuestion('')
     setError('')
-    const reply = getFaqReply(trimmed, services)
-    addBotMessage(reply)
-    if (reply.actionType === 'support') setSupportMessage(trimmed)
-  }
+    const nextMessages = [...messages, {
+      id: `${Date.now()}-user`,
+      sender: 'user',
+      text,
+      createdAt: new Date().toISOString(),
+    }]
+    setMessages(nextMessages)
 
-  const sendSupportMessage = async (message) => {
-    const text = message.trim()
-    if (!text || sendingSupport) return false
-    setSendingSupport(true)
-    setError('')
     try {
-      const conversation = supportThreadId
-        ? await api(`/api/support/messages/${supportThreadId}/replies`, {
-          method: 'POST',
-          body: JSON.stringify({ text }),
-        })
-        : await api('/api/support/messages', {
-          method: 'POST',
-          body: JSON.stringify({ text }),
-        })
-      setSupportThreadId(conversation._id)
-      const lastReply = conversation.replies?.[conversation.replies.length - 1]
-      const newMessages = lastReply
-        ? [{
-          id: lastReply._id,
-          sender: lastReply.senderType === 'Admin' ? 'admin' : 'user',
-          text: lastReply.text,
-        }]
-        : [{
-          id: `${conversation._id}-question`,
-          sender: 'user',
-          text,
-        }]
-      setMessages((items) => {
-        const next = [...items]
-        for (const newMessage of newMessages) {
-          const duplicate = next.findIndex((item) => item.sender === newMessage.sender && item.text === newMessage.text)
-          if (duplicate >= 0) {
-            next[duplicate] = newMessage
-            for (let index = next.length - 1; index >= 0; index -= 1) {
-              if (index !== duplicate && next[index].sender === newMessage.sender && next[index].text === newMessage.text) {
-                next.splice(index, 1)
-              }
-            }
-          } else {
-            next.push(newMessage)
-          }
-        }
-        return next
+      const history = nextMessages
+        .filter((message) => message.id !== 'welcome' && ['user', 'bot'].includes(message.sender))
+        .slice(-12)
+        .map((message) => ({
+          role: message.sender === 'user' ? 'user' : 'assistant',
+          content: message.text,
+        }))
+      const response = await api('/api/chat', {
+        method: 'POST',
+        signal: AbortSignal.timeout(25000),
+        body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
       })
-      setSupportMessage('')
-      setSupportPrompt(false)
-      return true
-    } catch (requestError) {
-      setError(requestError.message)
-      return false
-    } finally {
-      setSendingSupport(false)
-    }
-  }
-
-  const sendToSupport = async (event) => {
-    event.preventDefault()
-    const text = supportMessage.trim()
-    if (!text || sendingSupport) return
-    const sent = await sendSupportMessage(text)
-    if (sent && !supportThreadId) {
+      if (response.supportThreadId) setSupportThreadId(response.supportThreadId)
       setMessages((items) => [...items, {
-        id: `${Date.now()}-sent`,
+        id: `${Date.now()}-bot`,
         sender: 'bot',
-        text: 'Your message was sent to the CosmoCare support team. You can continue replying here.',
+        text: typeof response.reply === 'string' && response.reply.trim()
+          ? response.reply
+          : 'I’m sorry, I didn’t get a response. Please try asking again.',
+        services: response.services,
+        action: response.supportThreadId ? 'Reply to the CosmoCare team' : undefined,
+        actionType: response.supportThreadId ? 'support' : undefined,
+        createdAt: new Date().toISOString(),
       }])
+    } catch {
+      const failure = 'I’m sorry, CosmoCare Help is temporarily unavailable. Please try again in a moment, or use the services page to contact the team.'
+      setMessages((items) => [...items, {
+        id: `${Date.now()}-error`,
+        sender: 'bot',
+        text: failure,
+        createdAt: new Date().toISOString(),
+      }])
+    } finally {
+      sendingRef.current = false
+      setSending(false)
     }
   }
 
   const submitQuestion = (event) => {
     event.preventDefault()
-    if (supportThreadId) {
-      const text = question.trim()
-      if (text) void sendSupportMessage(text).then((sent) => sent && setQuestion(''))
-      return
+    void askQuestion(question)
+  }
+
+  const handleComposeKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault()
+      void askQuestion(question)
     }
-    askQuestion(question)
+  }
+
+  const sendSupportMessage = async (event) => {
+    event.preventDefault()
+    const text = supportMessage.trim()
+    if (!text || sendingSupport || !supportThreadId) return
+    setSendingSupport(true)
+    setError('')
+    try {
+      const conversation = await api(`/api/support/messages/${supportThreadId}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      })
+      setSupportThreadId(conversation._id)
+      setSupportMessage('')
+      setSupportPrompt(false)
+      setMessages((items) => [...items, {
+        id: `${Date.now()}-support-sent`,
+        sender: 'bot',
+        text: 'Your message has been sent to the CosmoCare team.',
+        createdAt: new Date().toISOString(),
+      }])
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSendingSupport(false)
+    }
   }
 
   const runAction = (message) => {
@@ -234,15 +207,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         onChooseService(service)
       }
     } else if (message.actionType === 'support') {
-      if (supportThreadId) {
-        setMessages((items) => [...items, {
-          id: `${Date.now()}-support-info`,
-          sender: 'bot',
-          text: 'Your support conversation is open. Reply using the message box below and the CosmoCare team will see it.',
-        }])
-      } else {
-        setSupportPrompt(true)
-      }
+      setSupportPrompt(true)
     }
   }
 
@@ -252,7 +217,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         <section className="customer-chat-window" role="dialog" aria-label="CosmoCare help and FAQs">
           <header className="customer-chat-header">
             <span className="customer-chat-avatar" aria-hidden="true">CC</span>
-            <div><strong>CosmoCare Help</strong><small><i /> FAQs & admin support</small></div>
+            <div><strong>CosmoCare Help</strong><small><i /> AI guest assistance</small></div>
             <button type="button" aria-label="Close help chat" onClick={() => setOpen(false)}>×</button>
           </header>
           <div className="customer-chat-messages" aria-live="polite">
@@ -260,22 +225,38 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
               <div className={`customer-chat-message ${message.sender === 'admin' ? 'admin' : message.sender}`} key={message.id}>
                 {message.sender === 'admin' && <span className="customer-chat-sender">CosmoCare support</span>}
                 <p>{message.text}</p>
+                <time dateTime={message.createdAt || undefined}>
+                  {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+                </time>
                 {message.action && <button className="customer-chat-action" type="button" onClick={() => runAction(message)}>{message.action} <span aria-hidden="true">›</span></button>}
-                {message.actionType === 'service-list' && services.length > 0 && (
+                {message.services?.length > 0 && (
                   <div className="customer-chat-service-list">
-                    {services.map((service) => (
-                      <button type="button" key={service.id} onClick={() => { setOpen(false); onChooseService(service) }}>
-                        <strong>{service.name}</strong><small>{service.description}</small>
-                      </button>
-                    ))}
+                    {message.services.map((listedService) => {
+                      const service = services.find((item) => item.name === listedService.name)
+                      return (
+                        <button type="button" key={listedService.name} onClick={() => {
+                          if (service) {
+                            setOpen(false)
+                            onChooseService(service)
+                          }
+                        }} disabled={!service}>
+                          <strong>{listedService.name}</strong><small>{listedService.description}</small>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
             ))}
+            {sending && (
+              <div className="customer-chat-typing" role="status" aria-label="CosmoCare is typing">
+                <span /><span /><span />
+              </div>
+            )}
             {supportPrompt && (
-              <form className="customer-chat-support" onSubmit={sendToSupport}>
+              <form className="customer-chat-support" onSubmit={sendSupportMessage}>
                 <label htmlFor="customer-support-message">Message the support team</label>
-                <textarea id="customer-support-message" rows="3" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Type your question here…" maxLength={2000} required />
+                <textarea id="customer-support-message" rows="3" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Type your message here…" maxLength={2000} required />
                 {error && <p className="customer-login-error" role="alert">{error}</p>}
                 <button type="submit" disabled={sendingSupport || !supportMessage.trim()}>{sendingSupport ? 'Sending…' : 'Send to support'}</button>
               </form>
@@ -286,15 +267,15 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
           <div className="customer-chat-faqs">
             <span>Popular questions</span>
             <div>
-              <button type="button" onClick={() => askQuestion('What services are available?')}>Available services</button>
-              <button type="button" onClick={() => askQuestion('How do I check my request status?')}>Check request status</button>
-              <button type="button" onClick={() => askQuestion('How can I contact staff?')}>Contact staff</button>
-              <button type="button" onClick={() => askQuestion('Can I change or cancel a request?')}>Change a request</button>
+              <button type="button" onClick={() => void askQuestion('What services are available?')} disabled={sending}>Available services</button>
+              <button type="button" onClick={() => void askQuestion('How do I check my request status?')} disabled={sending}>Check request status</button>
+              <button type="button" onClick={() => void askQuestion('How can I contact staff?')} disabled={sending}>Contact staff</button>
+              <button type="button" onClick={() => void askQuestion('Can I change or cancel a request?')} disabled={sending}>Change a request</button>
             </div>
           </div>
           <form className="customer-chat-compose" onSubmit={submitQuestion}>
-            <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={supportThreadId ? 'Reply to CosmoCare support…' : 'Ask a question…'} aria-label={supportThreadId ? 'Reply to CosmoCare support' : 'Ask CosmoCare a question'} maxLength={2000} />
-            <button type="submit" aria-label={supportThreadId ? 'Send reply' : 'Send question'} disabled={!question.trim() || sendingSupport}>➤</button>
+            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={handleComposeKeyDown} placeholder="Ask a question…" aria-label="Ask CosmoCare a question" maxLength={2000} rows="1" />
+            <button type="submit" aria-label="Send question" disabled={!question.trim() || sending}>➤</button>
           </form>
         </section>
       )}

@@ -336,7 +336,7 @@ function CustomerHomes() {
                 {requests.map((request) => (
                   <li key={request._id}>
                     <div><strong>{request.request}</strong>{request.details && <small>{request.details}</small>}<small>Submitted {new Date(request.createdAt).toLocaleString()}</small></div>
-                    <span className={`customer-request-status ${request.status === 'Completed' ? 'complete' : request.status === 'In progress' ? 'progress' : ''}`}>{request.status}</span>
+                    <span className={`customer-request-status ${request.status === 'Completed' ? 'complete' : request.status === 'In progress' ? 'progress' : request.status === 'Cancelled' ? 'cancelled' : ''}`}>{request.status}</span>
                   </li>
                 ))}
               </ul>

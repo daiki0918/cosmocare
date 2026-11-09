@@ -464,7 +464,7 @@ function TablePagination({ page, pages, total, onPageChange }) {
 }
 
 function RequestRow({ item, onUpdate, selectable = false, selected = false, onSelect }) {
-  const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : 'new'
+  const tone = item.status === 'Completed' ? 'done' : item.status === 'In progress' ? 'progress' : item.status === 'Cancelled' ? 'cancelled' : 'new'
   const requestInfo = (
     <span className="request-info">
       <span className="request-title"><ServiceIcon name={item.icon} /><strong>{item.request}</strong></span>
@@ -476,7 +476,7 @@ function RequestRow({ item, onUpdate, selectable = false, selected = false, onSe
       </span>
     </span>
   )
-  const status = selectable ? <select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, { status: event.target.value })}><option>Pending</option><option>In progress</option><option>Completed</option></select> : <span className={`request-status ${tone}`}>{item.status}</span>
+  const status = selectable ? <select className={`request-status-select ${tone}`} value={item.status} onChange={(event) => onUpdate(item.id, { status: event.target.value })}><option>Pending</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select> : <span className={`request-status ${tone}`}>{item.status}</span>
   return (
     <div className="request-row request-management-row">
       <span className="request-cell request-cell-request">

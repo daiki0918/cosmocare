@@ -14,7 +14,7 @@ function Reports({ requests = [] }) {
       <div className="admin-stat-grid report-stat-grid">
         <div className="admin-stat"><span className="stat-icon stat-blue">↗</span><small>Total requests</small><strong>{requests.length}</strong><em>Live from database</em></div>
         <div className="admin-stat"><span className="stat-icon stat-green">✓</span><small>Resolved requests</small><strong>{completed}</strong><em>{requests.length ? Math.round((completed / requests.length) * 100) : 0}% completion rate</em></div>
-        <div className="admin-stat"><span className="stat-icon stat-amber">◷</span><small>Needs attention</small><strong>{requests.filter((request) => request.status !== 'Completed').length}</strong><em className="stat-warning">Pending or in progress</em></div>
+        <div className="admin-stat"><span className="stat-icon stat-amber">◷</span><small>Needs attention</small><strong>{requests.filter((request) => !['Completed', 'Cancelled'].includes(request.status)).length}</strong><em className="stat-warning">Pending or in progress</em></div>
       </div>
       <section className="admin-panel">
         <div className="panel-heading">
@@ -22,7 +22,7 @@ function Reports({ requests = [] }) {
           <select className="report-period" value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Report period"><option>This week</option><option>This month</option><option>Last 90 days</option></select>
         </div>
         <div className="report-chart" aria-label={`Requests for ${period}`}>
-          {['Pending', 'In progress', 'Completed'].map((status) => {
+          {['Pending', 'In progress', 'Completed', 'Cancelled'].map((status) => {
             const count = requests.filter((request) => request.status === status).length
             const height = requests.length ? Math.max(8, (count / requests.length) * 100) : 8
             return <div className="chart-column" key={status}><span style={{ height: `${height}%` }} /><small>{status}</small></div>
