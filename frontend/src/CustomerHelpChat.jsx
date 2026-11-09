@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 
 const welcomeMessage = {
@@ -46,11 +46,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
     localStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)))
   }, [messages, storageKey])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, open, sending])
-
-  const closeChat = () => {
+  const closeChat = useCallback(() => {
     conversationRef.current += 1
     sendingRef.current = false
     setOpen(false)
@@ -63,7 +59,27 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
     setSendingSupport(false)
     setError('')
     localStorage.removeItem(storageKey)
-  }
+  }, [storageKey])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, open, sending])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const { overflow } = document.body.style
+    document.body.style.overflow = 'hidden'
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeChat()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = overflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, closeChat])
 
   useEffect(() => {
     if (!open || !supportThreadId) return undefined
@@ -132,6 +148,8 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
     }]
     setMessages(nextMessages)
 
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 25000)
     try {
       const history = nextMessages
         .filter((message) => message.id !== 'welcome' && ['user', 'bot'].includes(message.sender))
@@ -142,7 +160,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         }))
       const response = await api('/api/chat', {
         method: 'POST',
-        signal: AbortSignal.timeout(25000),
+        signal: controller.signal,
         body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
       })
       if (conversationRef.current !== conversationVersion) return
@@ -160,7 +178,9 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
       }])
     } catch (requestError) {
       if (conversationRef.current !== conversationVersion) return
-      const failure = requestError instanceof Error && requestError.message
+      const failure = controller.signal.aborted
+        ? 'CosmoCare Help took too long to respond. Please try again.'
+        : requestError instanceof Error && requestError.message
         ? requestError.message
         : 'I’m sorry, CosmoCare Help is temporarily unavailable. Please try again in a moment, or use the services page to contact the team.'
       setMessages((items) => [...items, {
@@ -170,6 +190,7 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
         createdAt: new Date().toISOString(),
       }])
     } finally {
+      window.clearTimeout(timeoutId)
       if (conversationRef.current === conversationVersion) {
         sendingRef.current = false
         setSending(false)
@@ -237,9 +258,14 @@ function CustomerHelpChat({ services, onViewRequests, onChooseService }) {
   }
 
   return (
-    <div className={`customer-chat-widget ${open ? 'open' : ''}`}>
+    <div
+      className={`customer-chat-widget ${open ? 'open' : ''}`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && open) closeChat()
+      }}
+    >
       {open && (
-        <section className="customer-chat-window" role="dialog" aria-label="CosmoCare help and FAQs">
+        <section className="customer-chat-window" role="dialog" aria-modal="true" aria-label="CosmoCare help and FAQs">
           <header className="customer-chat-header">
             <span className="customer-chat-avatar" aria-hidden="true">CC</span>
             <div><strong>CosmoCare Help</strong><small><i /> AI guest assistance</small></div>

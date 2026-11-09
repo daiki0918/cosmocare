@@ -496,10 +496,10 @@
   animation: ch-glow 3.6s var(--ch-ease-soft) infinite;
 }
 
-/* Cards flow into as many columns as fit – no breakpoint needed */
+/* Keep two-column cards wide enough for readable labels at tablet widths. */
 .customer-home .service-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: clamp(0.65rem, 2vw, 1rem);
 }
 
@@ -1391,8 +1391,8 @@
   }
 
   .customer-home .customer-view-requests {
-    width: auto;
-    min-width: 18rem;
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -1471,7 +1471,7 @@
   }
 }
 
-@media (max-width: 30rem) {
+@media (max-width: 37.5rem) {
   .customer-home .customer-footer {
     padding-right: calc(4.5rem + env(safe-area-inset-right));
   }
@@ -1500,7 +1500,7 @@
       env(safe-area-inset-bottom) env(safe-area-inset-left);
     align-items: stretch;
     justify-content: stretch;
-    background: rgb(37 49 45 / 42%);
+    background: rgb(37 49 45 / 56%);
   }
 
   .customer-home .customer-chat-widget.open .customer-chat-launcher {
@@ -1508,16 +1508,59 @@
   }
 
   .customer-home .customer-chat-window {
-    width: min(100%, 30rem);
+    width: 100%;
     height: 100%;
     max-height: none;
-    margin-left: auto;
+    max-width: none;
+    margin: 0;
     border-radius: 0;
   }
 
   .customer-home .customer-chat-messages {
     min-height: 0;
     flex: 1;
+  }
+}
+
+@media (min-width: 37.5625rem) and (max-width: 68.75rem),
+  (pointer: coarse) and (hover: none) and (min-width: 68.8125rem) {
+  .customer-home .customer-chat-widget.open {
+    inset: 0;
+    width: auto;
+    height: 100vh;
+    height: 100dvh;
+    padding: max(0.75rem, env(safe-area-inset-top))
+      max(0.75rem, env(safe-area-inset-right))
+      max(0.75rem, env(safe-area-inset-bottom))
+      max(0.75rem, env(safe-area-inset-left));
+    align-items: stretch;
+    justify-content: flex-end;
+    background: rgb(37 49 45 / 56%);
+  }
+
+  .customer-home .customer-chat-widget.open .customer-chat-launcher {
+    display: none;
+  }
+
+  .customer-home .customer-chat-window {
+    width: min(28rem, 100%);
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    flex: 1 1 auto;
+    margin-left: auto;
+    border-radius: var(--ch-radius-lg);
+    background: var(--chapel-white);
+  }
+
+  .customer-home .customer-chat-messages {
+    min-height: 0;
+    flex: 1;
+  }
+
+  .customer-home .customer-chat-faqs {
+    max-height: min(12rem, 24dvh);
+    overflow-y: auto;
   }
 }
 
