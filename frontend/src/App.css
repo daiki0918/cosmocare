@@ -2600,3 +2600,117 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+/* Guest sign-in: a quieter, hospitality-led entry point. */
+.customer-login {
+  --login-ivory: #f3eee5;
+  --login-paper: #fffdf8;
+  --login-ink: #243b36;
+  --login-muted: #69766f;
+  --login-sage: #dce8dc;
+  --login-line: #d8d5c9;
+  min-height: 100dvh;
+  overflow: hidden;
+  color: var(--login-ink);
+  background: var(--login-ivory);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.customer-login::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  opacity: 0.32;
+  background-image: radial-gradient(rgb(36 59 54 / 14%) 0.6px, transparent 0.6px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(135deg, #000, transparent 65%);
+}
+
+.customer-login-glow { display: none; }
+.customer-login-main { min-height: 100dvh; padding: clamp(1.25rem, 4vw, 3.75rem); display: grid; place-items: center; }
+.customer-login-layout { width: min(100%, 70rem); display: grid; grid-template-columns: minmax(0, 1fr) minmax(25rem, 31rem); align-items: center; gap: clamp(2rem, 7vw, 8rem); }
+
+.customer-login-story { max-width: 34rem; padding: 1rem 0; animation: login-rise 650ms cubic-bezier(.22, 1, .36, 1) both; }
+.customer-login-story-mark { width: 4.2rem; height: 4.2rem; margin-bottom: clamp(3rem, 8vw, 7rem); display: grid; place-items: center; border: 1px solid rgb(46 83 70 / 22%); border-radius: 1.25rem 0.35rem 1.25rem 0.35rem; background: var(--login-sage); }
+.customer-login-story-mark .brand-mark { width: 3.5rem; height: 3.5rem; border-radius: 1rem 0.3rem 1rem 0.3rem; background: transparent; }
+.customer-login-story-mark .brand-mark img { width: 3.2rem; height: 3.2rem; object-fit: contain; }
+.customer-login-kicker { margin: 0; color: #587666; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.17em; text-transform: uppercase; }
+.customer-login-story h1 { max-width: 9ch; margin: 0.85rem 0 1.3rem; color: var(--login-ink); font-family: 'Playfair Display', Georgia, serif; font-size: clamp(3.2rem, 7vw, 6rem); font-weight: 500; letter-spacing: -0.06em; line-height: 0.94; }
+.customer-login-story-copy { max-width: 28rem; margin: 0; color: var(--login-muted); font-size: clamp(0.95rem, 1.4vw, 1.08rem); line-height: 1.7; }
+.customer-login-quote { max-width: 25rem; margin-top: clamp(2rem, 5vw, 4rem); padding: 1rem 0 0 1.1rem; border-left: 2px solid #a9c2ac; display: flex; gap: 0.65rem; color: #4f655b; }
+.customer-login-quote span { margin-top: -0.5rem; color: #78957e; font-family: Georgia, serif; font-size: 2.25rem; line-height: 1; }
+.customer-login-quote p { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 1rem; line-height: 1.5; }
+
+.customer-login-card { width: 100%; padding: clamp(2rem, 5vw, 3.35rem); border: 1px solid var(--login-line); border-radius: 1.5rem 0.4rem 1.5rem 0.4rem; background: var(--login-paper); box-shadow: 0 1.25rem 3rem rgb(51 67 57 / 8%); animation: login-rise 650ms 100ms cubic-bezier(.22, 1, .36, 1) both; }
+.customer-login-brand { justify-content: flex-start; gap: 0.75rem; margin-bottom: 3rem; }
+.customer-login-brand .brand-mark { width: 2.75rem; height: 2.75rem; border-radius: 0.85rem 0.25rem 0.85rem 0.25rem; background: var(--login-sage); }
+.customer-login-brand .brand-mark img { width: 2.5rem; height: 2.5rem; }
+.customer-login-brand strong { color: var(--login-ink); font-family: 'Playfair Display', Georgia, serif; font-size: 1.15rem; font-weight: 600; }
+.customer-login-brand small { color: var(--login-muted); font-size: 0.68rem; letter-spacing: 0.1em; }
+.customer-login-heading { text-align: left; }
+.customer-login-heading h2 { margin: 0.7rem 0 0.55rem; color: var(--login-ink); font-family: 'Playfair Display', Georgia, serif; font-size: clamp(1.9rem, 4vw, 2.5rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1.05; }
+.customer-login-heading > p:last-child { max-width: 20rem; margin: 0; color: var(--login-muted); font-size: 0.88rem; line-height: 1.6; }
+.customer-login-card .login-form { margin-top: 2.25rem; gap: 0.65rem; }
+.customer-login-card .login-form label { margin-top: 0.5rem; color: #52645c; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.02em; }
+.customer-login-card .login-form input { min-height: 3.1rem; padding-inline: 0.95rem; border: 1px solid #d6d8cf; border-radius: 0.45rem; color: var(--login-ink); background: #fffefa; font-size: 0.9rem; transition: border-color .2s, box-shadow .2s, background-color .2s; }
+.customer-login-card .login-form input:focus { border-color: #789b80; background: #fff; box-shadow: 0 0 0 3px rgb(120 155 128 / 15%); }
+.customer-login-card .password-field button { right: 0.75rem; color: #5c8068; }
+.customer-login-card .password-toggle svg { width: 1.05rem; height: 1.05rem; }
+.customer-login-card .login-submit { min-height: 3.2rem; margin-top: 1.1rem; border: 1px solid #274f4e; border-radius: 0.45rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: #fffdf8; background: #274f4e; box-shadow: none; font-size: 0.85rem; letter-spacing: 0.01em; transition: background-color .2s, transform .2s; }
+.customer-login-card .login-submit span { font-size: 1.1rem; transition: transform .2s; }
+.customer-login-card .login-submit:hover { background: #1f4141; transform: translateY(-1px); }
+.customer-login-card .login-submit:hover span { transform: translateX(0.2rem); }
+.customer-login-card .customer-login-error { margin-top: 0.65rem; border: 1px solid #e0bcb4; border-radius: 0.45rem; color: #753c34; background: #fbefea; font-size: 0.75rem; }
+.customer-login-note { margin: 2rem 0 0; color: #85918a; text-align: left; font-size: 0.7rem; line-height: 1.6; }
+
+@keyframes login-rise { from { opacity: 0; transform: translateY(0.75rem); } }
+
+@media (max-width: 800px) {
+  .customer-login-layout { grid-template-columns: 1fr; gap: 2rem; max-width: 32rem; }
+  .customer-login-story { padding-top: 0; }
+  .customer-login-story-mark { margin-bottom: 2rem; }
+  .customer-login-story h1 { max-width: 12ch; font-size: clamp(2.75rem, 11vw, 4.5rem); }
+  .customer-login-quote { display: none; }
+}
+
+@media (max-width: 480px) {
+  .customer-login-main { padding: 1.25rem; place-items: start center; }
+  .customer-login-layout { gap: 1.75rem; }
+  .customer-login-story-mark { width: 3.5rem; height: 3.5rem; margin-bottom: 1.75rem; }
+  .customer-login-story-mark .brand-mark { width: 2.9rem; height: 2.9rem; }
+  .customer-login-story-mark .brand-mark img { width: 2.65rem; height: 2.65rem; }
+  .customer-login-story h1 { margin-top: 0.65rem; font-size: 3.05rem; }
+  .customer-login-story-copy { font-size: 0.9rem; }
+  .customer-login-card { padding: 1.5rem; border-radius: 1.15rem 0.3rem 1.15rem 0.3rem; }
+  .customer-login-brand { margin-bottom: 2.2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-login-story, .customer-login-card { animation: none; }
+}
+
+/* Final guest entry refinements: warm, restrained, and readable. */
+.customer-login {
+  background: #f4f0e8;
+}
+
+.customer-login::before {
+  opacity: 0;
+  background-image: none;
+  mask-image: none;
+}
+
+.customer-login-layout { gap: clamp(2rem, 6vw, 6rem); }
+.customer-login-story h1 { max-width: 11ch; font-size: clamp(2.9rem, 5.5vw, 4.8rem); line-height: 1; }
+.customer-login-story-mark { border-radius: 0.85rem; background: #dfe9df; }
+.customer-login-card { border-radius: 0.9rem; box-shadow: 0 1rem 2.75rem rgb(51 67 57 / 9%); }
+.customer-login-card .login-submit { border-radius: 0.55rem; background: #203f4a; }
+.customer-login-card .login-submit:hover { background: #18333d; }
+
+@media (max-width: 800px) {
+  .customer-login-story h1 { max-width: 12ch; font-size: clamp(2.7rem, 10vw, 4rem); }
+}
+
+@media (max-width: 480px) {
+  .customer-login-story h1 { font-size: clamp(2.8rem, 14vw, 3.6rem); }
+}

@@ -3,9 +3,11 @@ const configuredApiUrl = import.meta.env.VITE_API_URL;
 
 const productionApiUrl = 'https://cosmocare-backend.onrender.com';
 
-const defaultApiUrl = window.location.hostname.endsWith('.vercel.app')
-  ? productionApiUrl
-  : `http://${window.location.hostname}:5000`;
+const defaultApiUrl = import.meta.env.DEV
+  ? ''
+  : window.location.hostname.endsWith('.vercel.app')
+    ? productionApiUrl
+    : `http://${window.location.hostname}:5000`;
 
 const API_URL = (configuredApiUrl || defaultApiUrl).replace(/\/+$/, '');
 
@@ -66,7 +68,6 @@ export async function api(path, options = {}) {
 
   if (
     response.status === 401 &&
-    token &&
     path !== '/api/auth/login'
   ) {
     clearStoredSession();

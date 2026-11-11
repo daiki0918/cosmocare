@@ -37,7 +37,7 @@ function App() {
     return localStorage.getItem('staff-session') ? <StaffDashboard /> : <StaffLogin />
   }
 
-  if (!localStorage.getItem('chapel-session')) {
+  if (!localStorage.getItem('chapel-session') || !localStorage.getItem('cosmocare-token')) {
     return <CustomerLogin />
   }
 

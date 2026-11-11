@@ -3,7 +3,7 @@ import logo from '../../assets/Logo.png'
 import '../../App.css'
 import './CustomerHome.css'
 import { api } from '../../api.js'
-import CustomerHelpChat from '../../CustomerHelpChat.jsx'
+import CustomerHelpChat from './CustomerHelpChat.jsx'
 
 const REQUEST_COOLDOWN_MS = 30_000
 // Keep slightly above --ch-dur-base in CustomerHome.css (200ms) so exit animations can finish.
@@ -30,6 +30,7 @@ const Icon = ({ name }) => {
     arrow: <path d="M5 12h14m-6-6 6 6-6 6" />,
     back: <path d="M19 12H5m6 6-6-6 6-6" />,
     check: <path d="m5 12.5 4.2 4.2L19 7" />,
+    list: (<><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>),
     logout: <><path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4" /><path d="m15 8 4 4-4 4M19 12H9" /></>,
     close: <path d="M6 6l12 12M18 6 6 18" />,
   }
@@ -90,6 +91,26 @@ const serviceCategories = [
     title: 'Other Requests',
     description: 'Tell us what you need',
     icon: 'other',
+  },
+]
+
+/* Three quiet notes shown beneath the service list. Each one describes
+   behaviour that actually exists in this screen — no invented promises. */
+const assuranceNotes = [
+  {
+    title: 'Addressed to your chapel',
+    description: 'Your name and chapel are attached automatically. There is nothing to type.',
+    icon: 'check',
+  },
+  {
+    title: 'Reviewed before it is sent',
+    description: 'A short confirmation step lets you check the request first.',
+    icon: 'check',
+  },
+  {
+    title: 'Paced to prevent repeats',
+    description: 'A brief cooldown keeps an accidental double request from reaching the team.',
+    icon: 'check',
   },
 ]
 
@@ -249,7 +270,6 @@ function ModalShell({
     </div>
   )
 }
-
 function CustomerHomes() {
   const currentCustomer = getSignedInCustomer()
   const [services, setServices] = useState([])
@@ -270,7 +290,6 @@ function CustomerHomes() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [cooldownNow, setCooldownNow] = useState(() => Date.now())
   const [navDirection, setNavDirection] = useState('forward')
-  const [revealPlayed, setRevealPlayed] = useState(false)
   const submitLock = useRef(false)
   const accountMenuRef = useRef(null)
   const accountTriggerRef = useRef(null)
@@ -328,13 +347,40 @@ function CustomerHomes() {
     }))
     : []
 
-  // The card reveal plays once; after that, returning to the home screen doesn't re-stagger.
+  const viewKey = selectedCategory ? `category-${selectedCategory.id}` : showRequests ? 'requests' : 'home'
   const hasCategories = availableCategories.length > 0
   useEffect(() => {
-    if (!hasCategories || revealPlayed) return undefined
-    const timer = window.setTimeout(() => setRevealPlayed(true), 900)
-    return () => window.clearTimeout(timer)
-  }, [hasCategories, revealPlayed])
+    const revealTargets = document.querySelectorAll('.customer-home [data-reveal]')
+    if (!revealTargets.length) return undefined
+
+    const revealAll = () => revealTargets.forEach((target) => {
+      target.classList.remove('is-reveal-pending')
+      target.classList.add('is-revealed')
+    })
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      || !('IntersectionObserver' in window)
+    ) {
+      revealAll()
+      return undefined
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.remove('is-reveal-pending')
+        entry.target.classList.add('is-revealed')
+        observer.unobserve(entry.target)
+      })
+    }, { threshold: 0.12, rootMargin: '0px 0px -36px 0px' })
+
+    revealTargets.forEach((target) => {
+      target.classList.add('is-reveal-pending')
+      observer.observe(target)
+    })
+
+    return () => observer.disconnect()
+  }, [viewKey, hasCategories, servicesLoading])
 
   // While any dialog is open: lock background scroll without shifting the layout,
   // and let Escape close the top-most dialog.
@@ -362,7 +408,6 @@ function CustomerHomes() {
 
   // When the screen changes: scroll to top and move focus to the new heading
   // (keyboard and screen-reader users otherwise lose their place).
-  const viewKey = selectedCategory ? `category-${selectedCategory.id}` : showRequests ? 'requests' : 'home'
   const previousViewKey = useRef(viewKey)
   useEffect(() => {
     if (previousViewKey.current === viewKey) return
@@ -490,14 +535,30 @@ function CustomerHomes() {
     }
   }
 
+  const chapelName = currentCustomer?.chapel || currentCustomer?.branch || ''
+  const assistanceCategory = availableCategories.find((category) => category.id === 'assistance')
+  const customerInitials = (currentCustomer?.name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'CC'
+
   return (
     <div className="app-shell customer-home">
       <header className="customer-header">
-        <div className="customer-header-label">
-          <span>Cosmopolitan Funeral Homes</span>
-          {currentCustomer?.chapel && <small>{currentCustomer.chapel}</small>}
-        </div>
+        <a className="customer-brand" href="/" aria-label="CosmoCare home">
+          <span className="customer-brand-mark"><img src={logo} alt="" /></span>
+          <span className="customer-brand-copy">
+            <strong>CosmoCare</strong>
+            <small>{chapelName ? `Cosmopolitan Funeral Homes · ${chapelName}` : 'Cosmopolitan Funeral Homes'}</small>
+          </span>
+        </a>
         <div className="account-actions">
+          <span className="customer-header-note">
+            <i aria-hidden="true" />
+            Team ready to help
+          </span>
           <button
             ref={accountTriggerRef}
             className="customer-account-toggle"
@@ -507,7 +568,7 @@ function CustomerHomes() {
             aria-expanded={accountMenuOpen}
             onClick={() => setAccountMenuOpen((open) => !open)}
           >
-            <Icon name="arrow" />
+            <span className="customer-account-initials" aria-hidden="true">{customerInitials}</span>
           </button>
         </div>
       </header>
@@ -557,8 +618,11 @@ function CustomerHomes() {
               </button>
             </div>
             <div className="customer-account-details">
-              <strong>{currentCustomer?.name || 'Chapel account'}</strong>
-              <span>{currentCustomer?.chapel || currentCustomer?.branch || 'Signed in'}</span>
+              <span className="customer-account-avatar" aria-hidden="true">{customerInitials}</span>
+              <div>
+                <strong>{currentCustomer?.name || 'Chapel account'}</strong>
+                <span>{chapelName || 'Signed in'}</span>
+              </div>
             </div>
             <button
               className="customer-account-logout"
@@ -610,7 +674,7 @@ function CustomerHomes() {
                 </div>
               </div>
               <div className="customer-option-list">
-                {requestOptions.map((option) => {
+                {requestOptions.map((option, index) => {
                   const remainingMs = getCooldownRemaining(option.label)
                   const cooldownSeconds = Math.ceil(remainingMs / 1000)
                   const isCoolingDown = cooldownSeconds > 0
@@ -618,7 +682,7 @@ function CustomerHomes() {
                   return (
                     <button
                       className={`customer-option-button${isCoolingDown ? ' is-cooling' : ''}`}
-                      style={isCoolingDown ? { '--progress': Math.min(1, remainingMs / REQUEST_COOLDOWN_MS) } : undefined}
+                      style={{ '--i': Math.min(index, 8), ...(isCoolingDown ? { '--progress': Math.min(1, remainingMs / REQUEST_COOLDOWN_MS) } : null) }}
                       type="button"
                       key={option.label}
                       onClick={() => chooseRequest(option)}
@@ -669,18 +733,66 @@ function CustomerHomes() {
             </section>
           ) : (
             <div key={viewKey} className="customer-screen customer-home-view">
-              <div className="customer-welcome">
-                <div>
-                  <p className="eyebrow">Here whenever you need us</p>
-                  <h1 id="customer-welcome-title" tabIndex={-1} data-screen-heading>How can we assist you?</h1>
-                  <p>We're here to make your stay more comfortable.</p>
+              <section className="customer-welcome" aria-labelledby="customer-welcome-title">
+                <div className="customer-welcome-copy" data-reveal>
+                  <p className="eyebrow">Thoughtful care, whenever you need it</p>
+                  <h1 id="customer-welcome-title" tabIndex={-1} data-screen-heading>
+                    How can we <em>assist you today?</em>
+                  </h1>
+                  <p className="customer-welcome-lede">A little help can make this moment easier. Our chapel team is here to make your stay more comfortable.</p>
+                  <div className="customer-welcome-actions">
+                    {assistanceCategory && (
+                      <button
+                        className="customer-primary-action"
+                        type="button"
+                        onClick={() => selectCategory(assistanceCategory)}
+                        disabled={submitting}
+                      >
+                        <Icon name="staff" />
+                        <span>Call for assistance</span>
+                        <Icon name="arrow" />
+                      </button>
+                    )}
+                    <button
+                      className="customer-secondary-action"
+                      type="button"
+                      onClick={loadRequests}
+                      disabled={requestsLoading}
+                      aria-busy={requestsLoading}
+                    >
+                      {requestsLoading ? <span className="ch-spinner" aria-hidden="true" /> : <Icon name="list" />}
+                      <span>{requestsLoading ? 'Loading requests…' : 'View my requests'}</span>
+                    </button>
+                  </div>
+                  <ul className="customer-welcome-facts" aria-label="Your account details">
+                    {chapelName && (
+                      <li><span>Chapel</span><strong>{chapelName}</strong></li>
+                    )}
+                    <li><span>Signed in as</span><strong>{currentCustomer?.name || 'Chapel account'}</strong></li>
+                  </ul>
                 </div>
-                <span className="customer-heart" aria-hidden="true"><Icon name="heart" /></span>
-              </div>
+                <div className="customer-welcome-art" data-reveal aria-hidden="true">
+                  <span className="customer-art-orbit customer-art-orbit-one" />
+                  <span className="customer-art-orbit customer-art-orbit-two" />
+                  <span className="customer-art-caption">A quieter kind of care</span>
+                  <span className="customer-arch customer-arch-outer" />
+                  <span className="customer-arch customer-arch-inner" />
+                  <span className="customer-heart"><Icon name="heart" /></span>
+                  <span className="customer-art-note">
+                    <span className="customer-art-note-icon"><Icon name="check" /></span>
+                    <span><strong>Here for you</strong><small>Care, just a request away</small></span>
+                  </span>
+                  <span className="customer-welcome-stamp">CosmoCare · Chapel concierge</span>
+                </div>
+              </section>
+
               <section className="service-section customer-service-section" aria-labelledby="services-title">
-                <div className="customer-service-heading">
-                  <h2 id="services-title">Choose a service</h2>
-                  <span className="customer-available"><i aria-hidden="true" /> Team ready to help</span>
+                <div className="customer-service-heading" data-reveal>
+                  <div>
+                    <p className="eyebrow">What we can bring you</p>
+                    <h2 id="services-title">Choose a service</h2>
+                  </div>
+                  <span className="customer-available"><i aria-hidden="true" /> <span>Team ready to help</span></span>
                 </div>
                 {servicesLoading ? (
                   <div className="service-grid" aria-busy="true">
@@ -696,27 +808,59 @@ function CustomerHomes() {
                   <div className="service-grid">
                     {availableCategories.map((category, index) => (
                       <button
-                        className={`service-card customer-service-card${revealPlayed ? '' : ' is-revealing'}`}
+                        className="service-card customer-service-card"
+                        data-reveal
                         style={{ '--i': Math.min(index, 7) }}
                         type="button"
                         key={category.id}
                         onClick={() => selectCategory(category)}
                         disabled={submitting}
                       >
-                        <span className="customer-service-icon" aria-hidden="true"><Icon name={category.icon} /></span>
+                        <span className="customer-service-card-top">
+                          <span className="customer-service-icon" aria-hidden="true"><Icon name={category.icon} /></span>
+                          <span className="customer-service-index">SERVICE {String(index + 1).padStart(2, '0')}</span>
+                        </span>
                         <span className="service-text"><strong>{category.title}</strong><small>{category.description}</small></span>
+                        <span className="customer-service-card-bottom">
+                          <span>Explore service</span>
+                          <span className="card-arrow" aria-hidden="true"><Icon name="arrow" /></span>
+                        </span>
                       </button>
                     ))}
                   </div>
                 ) : !error && <p className="customer-empty-state">There are no assistance services available right now. Please contact a team member.</p>}
-                <button className="customer-view-requests" type="button" onClick={loadRequests} disabled={requestsLoading} aria-busy={requestsLoading}>
+                <button className="customer-view-requests" type="button" onClick={loadRequests} disabled={requestsLoading} aria-busy={requestsLoading} data-reveal>
                   <span className="customer-requests-icon" aria-hidden="true">
-                    {requestsLoading ? <span className="ch-spinner" /> : <Icon name="check" />}
+                    {requestsLoading ? <span className="ch-spinner" /> : <Icon name="list" />}
                   </span>
-                  <span>{requestsLoading ? 'Loading requests…' : 'View my requests'}</span>
+                  <span className="customer-view-requests-copy">
+                    <small className="customer-view-requests-label">Your activity</small>
+                    <strong>{requestsLoading ? 'Loading requests…' : 'View my requests'}</strong>
+                    <span>Follow each request from the moment you send it.</span>
+                  </span>
+                  <span className="customer-view-requests-arrow" aria-hidden="true"><Icon name="arrow" /></span>
                 </button>
                 {requestsError && <p className="customer-login-error" role="alert">{requestsError}</p>}
                 {error && <p className="customer-login-error" role="alert">{error}</p>}
+
+                <div className="customer-assurance" data-reveal>
+                  <div className="customer-assurance-head">
+                    <p className="eyebrow">Good to know</p>
+                    <h3>Considered details. Clear next steps.</h3>
+                    <p>Your chapel information is included automatically, and you can review each request before it reaches our team.</p>
+                  </div>
+                  <ul className="customer-assurance-list">
+                    {assuranceNotes.map((note) => (
+                      <li key={note.title}>
+                        <span className="customer-assurance-icon" aria-hidden="true"><Icon name={note.icon} /></span>
+                        <span>
+                          <strong>{note.title}</strong>
+                          <small>{note.description}</small>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
             </div>
           )}
@@ -837,6 +981,9 @@ function CustomerHomes() {
           <span className="brand-mark"><img src={logo} alt="" /></span>
           <span><strong>CosmoCare</strong><small>Quiet care. Thoughtful service.</small></span>
         </a>
+        <p className="customer-footer-note">
+          Cosmopolitan Funeral Homes{chapelName ? ` · ${chapelName}` : ''}
+        </p>
       </footer>
     </div>
   )
